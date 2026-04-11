@@ -1,9 +1,4 @@
-world_cup: true   # always on — all 104 FIFA World Cup 2026 games
-
-concerts:
-  - "Taylor Swift"
-  - "Coldplay"
+world_cup: true   # always on — all FIFA World Cup 2026 games
 
 sports:
-  - "NBA Finals"
   - "Yankees"

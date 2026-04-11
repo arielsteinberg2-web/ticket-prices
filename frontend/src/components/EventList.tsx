@@ -87,6 +87,9 @@ export function EventList({ events, selectedId, onSelect }: Props) {
                 {event.latest_price != null ? (
                   <span style={{ fontWeight: 700, color: changeColor }}>
                     ${event.latest_price.toFixed(0)}
+                    {event.price_source === 'seatgeek' && (
+                      <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 2 }}>SG</span>
+                    )}
                   </span>
                 ) : (
                   <span style={{ opacity: 0.3, fontSize: 12 }}>No price</span>

@@ -1,4 +1,4 @@
-export type Category = 'world_cup' | 'concerts' | 'sports';
+export type Category = 'world_cup' | 'sports';
 
 export interface Event {
   id: number;
@@ -10,6 +10,7 @@ export interface Event {
   latest_price: number | null;
   weekly_change_pct: number | null;
   snapshot_count: number;
+  price_source?: string | null;
 }
 
 export interface PriceSnapshot {
@@ -24,4 +25,15 @@ export interface Prediction {
   recommendation?: 'BUY NOW' | 'BUY SOON' | 'WAIT';
   slope?: number;
   message?: string;
+}
+
+export interface SearchResult {
+  ticketmaster_id: string;
+  name: string;
+  category: string;
+  event_date: string | null;
+  venue: string | null;
+  city: string | null;
+  lowest_price: number | null;
+  already_tracked: boolean;
 }

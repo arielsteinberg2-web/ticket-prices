@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Event, PriceSnapshot, Prediction, Category } from './types';
+import type { Event, PriceSnapshot, Prediction, Category, SearchResult } from './types';
 
 const base = axios.create({ baseURL: '/api' });
 
@@ -21,4 +21,14 @@ export async function fetchPrediction(eventId: number): Promise<Prediction> {
 
 export async function triggerFetch(): Promise<void> {
   await base.post('/fetch');
+}
+
+export async function searchEvents(q: string, category: string): Promise<SearchResult[]> {
+  const { data } = await base.get<SearchResult[]>('/search', { params: { q, category } });
+  return data;
+}
+
+export async function trackEvent(result: SearchResult): Promise<{ status: string; id: number }> {
+  const { data } = await base.post('/track', result);
+  return data;
 }
