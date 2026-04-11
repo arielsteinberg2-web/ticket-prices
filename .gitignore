@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Data
+data/prices.db
+
+# Environment
+.env
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Superpowers brainstorm artifacts
+.superpowers/
+
+# Docs build artifacts
+docs/superpowers/specs/
+docs/superpowers/plans/
