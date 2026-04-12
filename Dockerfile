@@ -23,8 +23,8 @@ RUN cd frontend && npm run build
 COPY backend/ backend/
 COPY watchlist.yaml .
 
-# Create data directory for SQLite DB
-RUN mkdir -p /app/data
+# Create data directories (local fallback; Fly.io mounts volume at /data)
+RUN mkdir -p /app/data /data
 
 EXPOSE 8000
 
