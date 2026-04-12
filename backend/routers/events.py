@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 from backend.db import Event, PriceSnapshot, get_session
 from backend.prediction import predict
+from backend.ai_prediction import ai_predict
 
 router = APIRouter(prefix="/api")
 
@@ -98,7 +99,7 @@ def get_prediction(event_id: int, db: Session = Depends(get_session)):
     prices = [(s.fetched_at.date(), s.lowest_price) for s in snapshots]
     event_date = event.event_date.date() if event.event_date else None
 
-    result = predict(prices, event_date=event_date)
+    result = ai_predict(prices, event_name=event.name, event_date=event_date)
     if result is None:
         return {"has_data": False, "message": "Not enough data yet (need at least 3 days)"}
 
@@ -108,7 +109,36 @@ def get_prediction(event_id: int, db: Session = Depends(get_session)):
         "predicted_price_7d": result.predicted_price_7d,
         "recommendation": result.recommendation,
         "slope": result.slope,
+        "score": result.score,
     }
+
+
+@router.get("/status")
+def get_status():
+    """Return token expiry and system health info."""
+    import base64, json as _json, datetime as _dt
+    from backend.config import TICKPICK_TOKEN
+
+    token_info = {"configured": bool(TICKPICK_TOKEN), "expires_at": None, "days_remaining": None, "valid": False}
+
+    if TICKPICK_TOKEN:
+        try:
+            payload_b64 = TICKPICK_TOKEN.split('.')[1]
+            payload_b64 += '=' * (4 - len(payload_b64) % 4)
+            payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+            exp = payload.get('exp')
+            if exp:
+                exp_dt = _dt.datetime.utcfromtimestamp(exp)
+                days_left = (exp_dt - _dt.datetime.utcnow()).days
+                token_info.update({
+                    "expires_at": exp_dt.isoformat(),
+                    "days_remaining": days_left,
+                    "valid": days_left > 0,
+                })
+        except Exception:
+            pass
+
+    return {"tickpick_token": token_info}
 
 
 @router.post("/fetch")

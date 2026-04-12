@@ -9,6 +9,15 @@ interface Props {
   slope?: number;
 }
 
+function formatTick(iso: string) {
+  const d = new Date(iso);
+  const mo = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  const hr = d.getHours().toString().padStart(2, '0');
+  const mn = d.getMinutes().toString().padStart(2, '0');
+  return `${mo}/${day} ${hr}:${mn}`;
+}
+
 export function PriceChart({ snapshots, slope }: Props) {
   if (snapshots.length === 0) {
     return (
@@ -19,7 +28,7 @@ export function PriceChart({ snapshots, slope }: Props) {
   }
 
   const chartData = snapshots.map((s, i) => ({
-    date: s.fetched_at.slice(0, 10),
+    label: formatTick(s.fetched_at),
     price: s.lowest_price,
     trend: slope != null ? +(snapshots[0].lowest_price + slope * i).toFixed(2) : undefined,
   }));
@@ -28,17 +37,29 @@ export function PriceChart({ snapshots, slope }: Props) {
   const minY = Math.floor(Math.min(...prices) * 0.9);
   const maxY = Math.ceil(Math.max(...prices) * 1.1);
 
+  // Show at most ~6 ticks to avoid crowding
+  const tickInterval = Math.max(1, Math.floor(chartData.length / 6));
+
   return (
     <div style={{ background: '#0e0e1a', borderRadius: 8, padding: '12px 0 4px', marginBottom: 14 }}>
       <div style={{ fontSize: 11, opacity: 0.4, paddingLeft: 16, marginBottom: 6 }}>Lowest price over time ($)</div>
       <ResponsiveContainer width="100%" height={160}>
-        <LineChart data={chartData} margin={{ top: 4, right: 20, bottom: 0, left: 0 }}>
+        <LineChart data={chartData} margin={{ top: 4, right: 20, bottom: 20, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#ffffff60' }} tickLine={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 9, fill: '#ffffff60' }}
+            tickLine={false}
+            interval={tickInterval}
+            angle={-35}
+            textAnchor="end"
+            height={40}
+          />
           <YAxis domain={[minY, maxY]} tick={{ fontSize: 10, fill: '#ffffff60' }} tickLine={false} width={50} />
           <Tooltip
             contentStyle={{ background: '#1e1e2e', border: '1px solid #333', borderRadius: 6, fontSize: 12 }}
             formatter={(value: number) => [`$${value.toFixed(2)}`, '']}
+            labelFormatter={(label) => label}
           />
           <Line
             type="monotone" dataKey="price" stroke="#34d399"

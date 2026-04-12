@@ -1,4 +1,5 @@
 import type { Event, PriceSnapshot, Prediction } from '../types';
+import { extractTeams, FlagImg } from '../utils/teams';
 
 interface Props {
   event: Event;
@@ -22,16 +23,31 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
   const prices = snapshots.map(s => s.lowest_price);
   const latest = prices.at(-1) ?? null;
   const allTimeLow = prices.length ? Math.min(...prices) : null;
+  const uniqueDays = new Set(snapshots.map(s => s.fetched_at.slice(0, 10))).size;
 
   const rec = prediction?.recommendation;
   const colors = rec ? COLORS[rec] : null;
 
+  const teams = event.category === 'world_cup' ? extractTeams(event.name) : [];
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{event.name}</div>
-          <div style={{ fontSize: 12, opacity: 0.5, marginTop: 3 }}>
+        <div style={{ flex: 1, paddingRight: 12 }}>
+          {teams.length > 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+              {teams.map((t, i) => (
+                <span key={t.iso} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {i > 0 && <span style={{ opacity: 0.35, fontSize: 12 }}>vs</span>}
+                  <FlagImg iso={t.iso} size={28} />
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{t.display}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{event.name}</div>
+          )}
+          <div style={{ fontSize: 12, opacity: 0.5 }}>
             {event.event_date ? new Date(event.event_date).toLocaleDateString('en-US', { dateStyle: 'long' }) : 'Date TBD'}
             {event.venue ? ` · ${event.venue}` : ''}
             {event.city ? `, ${event.city}` : ''}
@@ -41,7 +57,7 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
         {prediction?.has_data && colors && rec ? (
           <div style={{
             background: colors.bg, border: `1px solid ${colors.border}`,
-            borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110,
+            borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110, flexShrink: 0,
           }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: colors.text }}>
               Recommendation
@@ -56,7 +72,7 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
         ) : (
           <div style={{
             background: '#1a1a2e', border: '1px solid #333',
-            borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110,
+            borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110, flexShrink: 0,
           }}>
             <div style={{ fontSize: 11, opacity: 0.4 }}>
               {prediction == null ? 'Loading...' : 'Not enough data yet'}
@@ -75,7 +91,7 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
               ? `~$${prediction.predicted_price_7d.toFixed(0)}` : '—',
             color: '#f59e0b',
           },
-          { label: 'Days Tracked', value: String(snapshots.length) },
+          { label: 'Days Tracked', value: String(uniqueDays) },
         ].map(stat => (
           <div key={stat.label} style={{
             flex: 1, background: '#0e0e1a', borderRadius: 8,

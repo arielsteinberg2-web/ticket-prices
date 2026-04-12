@@ -114,9 +114,11 @@ def run_fetch_job(db: Session = None):
                         source="seatgeek",
                     ))
 
-        # TickPick: auto-discover IDs for events that don't have one yet
+        # TickPick: check token expiry, then fetch prices
         from backend.config import TICKPICK_TOKEN
-        from backend.tickpick_fetcher import fetch_tickpick_price, find_tickpick_id, _get_sitemap_events
+        from backend.tickpick_fetcher import fetch_tickpick_price, find_tickpick_id, _get_sitemap_events, check_token_expiry
+        if TICKPICK_TOKEN:
+            check_token_expiry(TICKPICK_TOKEN)
         if TICKPICK_TOKEN:
             # Warm the sitemap cache (downloads only if stale/missing)
             _get_sitemap_events()

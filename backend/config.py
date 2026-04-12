@@ -11,6 +11,7 @@ TICKETMASTER_API_KEY: str = os.getenv("TICKETMASTER_API_KEY", "")
 SEATGEEK_CLIENT_ID: str = os.getenv("SEATGEEK_CLIENT_ID", "")
 TICKPICK_TOKEN: str = os.getenv("TICKPICK_TOKEN", "")
 DB_PATH: str = os.getenv("DB_PATH", "data/prices.db")
+ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
 
 def load_watchlist(path: Path = None) -> dict:

@@ -9,6 +9,44 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+
+def check_token_expiry(token: str) -> None:
+    """Decode JWT expiry and warn/email if within 14 days."""
+    try:
+        import base64, json as _json, datetime as _dt
+        payload_b64 = token.split('.')[1]
+        payload_b64 += '=' * (4 - len(payload_b64) % 4)
+        payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+        exp = payload.get('exp')
+        if not exp:
+            return
+        exp_dt = _dt.datetime.utcfromtimestamp(exp)
+        days_left = (exp_dt - _dt.datetime.utcnow()).days
+        logger.info("TickPick token expires %s (%d days)", exp_dt.strftime('%Y-%m-%d'), days_left)
+        if days_left <= 14:
+            logger.warning("TickPick token expires in %d days!", days_left)
+            try:
+                import os, smtplib
+                from email.mime.text import MIMEText
+                gmail_user = os.getenv("GMAIL_USER", "")
+                gmail_pass = os.getenv("GMAIL_APP_PASSWORD", "")
+                if gmail_user and gmail_pass:
+                    msg = MIMEText(
+                        f"Your TickPick auth token expires on {exp_dt.strftime('%B %d, %Y')} ({days_left} days). "
+                        f"Update TICKPICK_TOKEN in your .env / Railway environment variables."
+                    )
+                    msg["Subject"] = f"TickPick token expires in {days_left} days — action required"
+                    msg["From"] = gmail_user
+                    msg["To"] = gmail_user
+                    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                        s.login(gmail_user, gmail_pass)
+                        s.sendmail(gmail_user, gmail_user, msg.as_string())
+            except Exception as e:
+                logger.error("Failed to send token expiry alert: %s", e)
+    except Exception:
+        pass  # Don't crash if token parsing fails
+
+
 BASE_URL = "https://api.tickpick.com/1.0/listings/internal/event-v2"
 HEADERS = {
     "client-platform": "web",

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Category, Event, PriceSnapshot, Prediction } from './types';
-import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent } from './api';
+import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus } from './api';
 import { EventList } from './components/EventList';
 import { WorldCupGrid } from './components/WorldCupGrid';
 import { PriceChart } from './components/PriceChart';
@@ -22,6 +22,11 @@ export default function App() {
   const [fetching, setFetching] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [showSearch] = useState(true);
+  const [tokenDays, setTokenDays] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchStatus().then(s => setTokenDays(s?.tickpick_token?.days_remaining ?? null));
+  }, []);
 
   const loadEvents = useCallback(async (category: Category) => {
     setLoading(true);
@@ -96,6 +101,11 @@ export default function App() {
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px' }}>
+          {tokenDays !== null && tokenDays <= 14 && (
+            <span style={{ fontSize: 11, color: tokenDays <= 7 ? '#f87171' : '#f59e0b', fontWeight: 600 }}>
+              ⚠ TickPick token expires in {tokenDays}d
+            </span>
+          )}
           {lastFetch && <span style={{ fontSize: 11, opacity: 0.4 }}>Last fetch: {lastFetch}</span>}
           <button
             onClick={handleFetch}

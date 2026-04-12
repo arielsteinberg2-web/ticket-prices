@@ -36,3 +36,8 @@ export async function trackEvent(result: SearchResult): Promise<{ status: string
 export async function deleteEvent(eventId: number): Promise<void> {
   await base.delete(`/events/${eventId}`);
 }
+
+export async function fetchStatus(): Promise<any> {
+  const { data } = await base.get('/status');
+  return data;
+}
