@@ -8,6 +8,8 @@ _root = Path(__file__).parent.parent
 load_dotenv(_root / ".env")
 
 TICKETMASTER_API_KEY: str = os.getenv("TICKETMASTER_API_KEY", "")
+SEATGEEK_CLIENT_ID: str = os.getenv("SEATGEEK_CLIENT_ID", "")
+TICKPICK_TOKEN: str = os.getenv("TICKPICK_TOKEN", "")
 DB_PATH: str = os.getenv("DB_PATH", "data/prices.db")
 
 
@@ -27,7 +29,7 @@ def get_search_targets(watchlist: dict) -> list[dict]:
     targets = []
     if watchlist.get("world_cup"):
         targets.append({
-            "keyword": "FIFA World Cup 2026",
+            "keyword": "World Cup 2026",
             "classification": "Sports",
             "category": "world_cup",
         })
@@ -37,10 +39,10 @@ def get_search_targets(watchlist: dict) -> list[dict]:
             "classification": "Music",
             "category": "concerts",
         })
-    for team in watchlist.get("sports", []):
+    for item in watchlist.get("events", []):
         targets.append({
-            "keyword": team,
-            "classification": "Sports",
-            "category": "sports",
+            "keyword": item,
+            "classification": None,
+            "category": "events",
         })
     return targets

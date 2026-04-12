@@ -1,5 +1,6 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import not_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -14,7 +15,29 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
     query = db.query(Event)
     if category:
         query = query.filter(Event.category == category)
-    events = query.all()
+    # FIFA World Cup 2026 host cities (USA, Canada, Mexico)
+    WC_HOST_CITIES = {
+        'new york', 'new jersey', 'east rutherford', 'los angeles', 'inglewood',
+        'dallas', 'arlington', 'san francisco', 'santa clara', 'seattle',
+        'miami', 'miami gardens', 'boston', 'foxborough', 'kansas city',
+        'philadelphia', 'houston', 'atlanta', 'toronto', 'vancouver',
+        'guadalajara', 'zapopan', 'mexico city', 'monterrey',
+    }
+
+    if category == 'world_cup':
+        query = query.filter(
+            Event.name.ilike('%World Cup%'),
+            not_(Event.name.ilike('%FEI%')),
+            not_(Event.name.ilike('%Pacific%')),
+        )
+        events = query.all()
+        # Keep only events in host cities (or where city is unknown)
+        events = [
+            e for e in events
+            if e.city is None or any(h in e.city.lower() for h in WC_HOST_CITIES)
+        ]
+    else:
+        events = query.all()
 
     result = []
     for event in events:
@@ -37,8 +60,20 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             "weekly_change_pct": weekly_change,
             "snapshot_count": len(snapshots),
             "price_source": snapshots[-1].source if snapshots else None,
+            "price_history": [s.lowest_price for s in snapshots[-20:]],
         })
     return result
+
+
+@router.delete("/events/{event_id}")
+def delete_event(event_id: int, db: Session = Depends(get_session)):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    db.query(PriceSnapshot).filter_by(event_id=event_id).delete()
+    db.delete(event)
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.get("/events/{event_id}/history")
@@ -90,7 +125,12 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
     from backend.fetcher import fetch_events, build_event_record
     from backend.config import TICKETMASTER_API_KEY
 
-    classification = "Sports" if category in ("sports", "world_cup") else "Music"
+    if category == "world_cup":
+        classification = "Sports"
+    elif category == "events":
+        classification = None  # search all types
+    else:
+        classification = "Sports"
     try:
         raw_events = fetch_events(q, classification, TICKETMASTER_API_KEY)
     except Exception as e:
@@ -120,6 +160,8 @@ class TrackRequest(BaseModel):
     event_date: Optional[str] = None
     venue: Optional[str] = None
     city: Optional[str] = None
+    lowest_price: Optional[float] = None
+    tickpick_url: Optional[str] = None
 
 
 @router.post("/track")
@@ -136,6 +178,15 @@ def track_event(body: TrackRequest, db: Session = Depends(get_session)):
         except ValueError:
             pass
 
+    # Resolve TickPick event ID: from explicit URL, or auto-discover via sitemaps
+    tickpick_id = None
+    if body.tickpick_url:
+        from backend.tickpick_fetcher import extract_tickpick_id
+        tickpick_id = extract_tickpick_id(body.tickpick_url)
+    elif event_date:
+        from backend.tickpick_fetcher import find_tickpick_id
+        tickpick_id = find_tickpick_id(body.name, event_date)
+
     event = Event(
         ticketmaster_id=body.ticketmaster_id,
         name=body.name,
@@ -143,7 +194,71 @@ def track_event(body: TrackRequest, db: Session = Depends(get_session)):
         event_date=event_date,
         venue=body.venue,
         city=body.city,
+        tickpick_id=tickpick_id,
     )
     db.add(event)
+    db.flush()
+
+    now = datetime.datetime.utcnow()
+    price_saved = False
+
+    # Try price from search result first, then direct TM lookup
+    tm_price = body.lowest_price
+    if tm_price is None:
+        from backend.fetcher import fetch_event_price
+        from backend.config import TICKETMASTER_API_KEY
+        tm_price = fetch_event_price(body.ticketmaster_id, TICKETMASTER_API_KEY)
+
+    if tm_price is not None:
+        db.add(PriceSnapshot(
+            event_id=event.id,
+            fetched_at=now,
+            lowest_price=tm_price,
+            source="ticketmaster",
+        ))
+        price_saved = True
+
+    # Fall back to SeatGeek if no Ticketmaster price
+    if not price_saved:
+        from backend.config import SEATGEEK_CLIENT_ID
+        from backend.seatgeek_fetcher import fetch_seatgeek_events, build_seatgeek_record
+        if SEATGEEK_CLIENT_ID:
+            try:
+                sg_events = fetch_seatgeek_events(body.name, SEATGEEK_CLIENT_ID)
+                for raw in sg_events[:10]:
+                    record = build_seatgeek_record(raw, body.category)
+                    if record["lowest_price"] is None:
+                        continue
+                    # Match by name similarity
+                    sg_words = set(record["name"].lower().split())
+                    body_words = set(body.name.lower().split())
+                    if len(sg_words & body_words) / max(len(body_words), 1) > 0.4:
+                        event.seatgeek_id = record["seatgeek_id"]
+                        db.add(PriceSnapshot(
+                            event_id=event.id,
+                            fetched_at=now,
+                            lowest_price=record["lowest_price"],
+                            source="seatgeek",
+                        ))
+                        price_saved = True
+                        break
+            except Exception:
+                pass
+
+    # Try TickPick (URL provided or auto-discovered) if no price yet
+    if not price_saved and tickpick_id:
+        from backend.config import TICKPICK_TOKEN
+        from backend.tickpick_fetcher import fetch_tickpick_price
+        if TICKPICK_TOKEN:
+            tp_price = fetch_tickpick_price(tickpick_id, TICKPICK_TOKEN)
+            if tp_price is not None:
+                db.add(PriceSnapshot(
+                    event_id=event.id,
+                    fetched_at=now,
+                    lowest_price=tp_price,
+                    source="tickpick",
+                ))
+                price_saved = True
+
     db.commit()
-    return {"status": "ok", "id": event.id}
+    return {"status": "ok", "id": event.id, "price_fetched": price_saved}

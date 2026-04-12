@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Category, Event, PriceSnapshot, Prediction } from './types';
-import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch } from './api';
+import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent } from './api';
 import { EventList } from './components/EventList';
+import { WorldCupGrid } from './components/WorldCupGrid';
 import { PriceChart } from './components/PriceChart';
 import { BuyRecommendation } from './components/BuyRecommendation';
 import { EventSearch } from './components/EventSearch';
 
 const TABS: { key: Category; label: string; emoji: string }[] = [
   { key: 'world_cup', label: 'World Cup 2026', emoji: '⚽' },
-  { key: 'sports',    label: 'Sports',          emoji: '🏆' },
+  { key: 'events',    label: 'Events',          emoji: '🎭' },
 ];
 
 export default function App() {
@@ -20,7 +21,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
+  const [showSearch] = useState(true);
 
   const loadEvents = useCallback(async (category: Category) => {
     setLoading(true);
@@ -37,7 +38,6 @@ export default function App() {
     setSelectedEvent(null);
     setSnapshots([]);
     setPrediction(null);
-    setShowSearch(false);
     loadEvents(activeTab);
   }, [activeTab, loadEvents]);
 
@@ -53,6 +53,12 @@ export default function App() {
       setPrediction(pred);
     });
   }, [selectedEvent]);
+
+  const handleDelete = async (eventId: number) => {
+    await deleteEvent(eventId);
+    if (selectedEvent?.id === eventId) setSelectedEvent(null);
+    await loadEvents(activeTab);
+  };
 
   const handleFetch = async () => {
     setFetching(true);
@@ -110,41 +116,51 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 49px)', opacity: 0.4 }}>
           Loading events...
         </div>
+      ) : activeTab === 'world_cup' ? (
+        /* World Cup — card grid + detail panel */
+        <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
+          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
+            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111' }}>
+              <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup')} />
+            </div>
+            <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
+              {events.length} games tracked
+            </div>
+            <WorldCupGrid
+              events={events}
+              selectedId={selectedEvent?.id ?? null}
+              onSelect={e => setSelectedEvent(e)}
+              onDelete={handleDelete}
+            />
+          </div>
+          {selectedEvent && (
+            <div style={{ width: 380, borderLeft: '1px solid #333', padding: '20px 24px', overflowY: 'auto', background: '#13131f', flexShrink: 0 }}>
+              <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
+              <PriceChart snapshots={snapshots} slope={prediction?.slope} />
+            </div>
+          )}
+        </div>
       ) : (
+        /* Events tab — sidebar + detail panel */
         <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
           {/* Left panel */}
           <div style={{ width: 280, borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', background: '#161622' }}>
-            {/* Search toggle */}
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
               <span style={{ fontSize: 11, opacity: 0.4, textTransform: 'uppercase', letterSpacing: 1 }}>
-                {events.length} events
+                {events.length} tracked events
               </span>
-              <button
-                onClick={() => setShowSearch(s => !s)}
-                style={{
-                  background: showSearch ? '#a78bfa20' : 'none',
-                  border: `1px solid ${showSearch ? '#a78bfa' : '#333'}`,
-                  color: showSearch ? '#a78bfa' : '#ffffff60',
-                  borderRadius: 5, padding: '3px 10px', fontSize: 11, cursor: 'pointer',
-                }}
-              >
-                {showSearch ? '✕ Close' : '+ Add Events'}
-              </button>
             </div>
-
-            {/* Search panel */}
             {showSearch && (
               <EventSearch
                 category={activeTab}
                 onTracked={() => loadEvents(activeTab)}
               />
             )}
-
-            {/* Event list */}
             <EventList
               events={events}
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
+              onDelete={handleDelete}
             />
           </div>
 

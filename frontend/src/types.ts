@@ -1,4 +1,4 @@
-export type Category = 'world_cup' | 'sports';
+export type Category = 'world_cup' | 'events';
 
 export interface Event {
   id: number;
@@ -11,6 +11,7 @@ export interface Event {
   weekly_change_pct: number | null;
   snapshot_count: number;
   price_source?: string | null;
+  price_history?: number[];
 }
 
 export interface PriceSnapshot {
@@ -36,4 +37,5 @@ export interface SearchResult {
   city: string | null;
   lowest_price: number | null;
   already_tracked: boolean;
+  tickpick_url?: string;
 }

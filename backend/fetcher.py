@@ -11,9 +11,10 @@ MAX_RETRIES = 3
 PAGE_SIZE = 200
 
 
-def fetch_events(keyword: str, classification: str, api_key: str) -> list[dict]:
+def fetch_events(keyword: str, classification: str | None, api_key: str) -> list[dict]:
     """
-    Fetch all events matching keyword + classification from Ticketmaster.
+    Fetch all events matching keyword from Ticketmaster.
+    Pass classification=None to search across all event types.
     Handles pagination automatically. Returns list of raw event dicts.
     """
     events = []
@@ -23,13 +24,15 @@ def fetch_events(keyword: str, classification: str, api_key: str) -> list[dict]:
         resp = None
         for attempt in range(MAX_RETRIES):
             try:
-                resp = requests.get(BASE_URL, params={
+                params = {
                     "apikey": api_key,
                     "keyword": keyword,
-                    "classificationName": classification,
                     "size": PAGE_SIZE,
                     "page": page,
-                }, timeout=10)
+                }
+                if classification:
+                    params["classificationName"] = classification
+                resp = requests.get(BASE_URL, params=params, timeout=10)
                 if resp.status_code == 429:
                     wait = 2 ** attempt
                     logger.warning("Rate limited. Waiting %ds before retry.", wait)
@@ -59,6 +62,21 @@ def fetch_events(keyword: str, classification: str, api_key: str) -> list[dict]:
         page += 1
 
     return events
+
+
+def fetch_event_price(ticketmaster_id: str, api_key: str) -> Optional[float]:
+    """Fetch price for a single event by ID directly from Ticketmaster."""
+    try:
+        resp = requests.get(
+            f"https://app.ticketmaster.com/discovery/v2/events/{ticketmaster_id}.json",
+            params={"apikey": api_key},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return None
+        return extract_lowest_price(resp.json())
+    except requests.RequestException:
+        return None
 
 
 def extract_lowest_price(event: dict) -> Optional[float]:

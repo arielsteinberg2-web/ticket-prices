@@ -12,6 +12,7 @@ export function EventSearch({ category, onTracked }: Props) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
+  const [tickpickUrls, setTickpickUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async () => {
@@ -30,7 +31,8 @@ export function EventSearch({ category, onTracked }: Props) {
   };
 
   const handleTrack = async (result: SearchResult) => {
-    await trackEvent({ ...result, category });
+    const tickpick_url = tickpickUrls[result.ticketmaster_id] || undefined;
+    await trackEvent({ ...result, category, tickpick_url });
     setTracked(prev => new Set([...prev, result.ticketmaster_id]));
     onTracked();
   };
@@ -42,7 +44,7 @@ export function EventSearch({ category, onTracked }: Props) {
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          placeholder={`Search ${category === 'world_cup' ? 'World Cup' : 'sports'} events...`}
+          placeholder={`Search ${category === 'world_cup' ? 'World Cup' : 'any'} events...`}
           style={{
             flex: 1, padding: '7px 11px', background: '#1a1a2e',
             border: '1px solid #a78bfa50', borderRadius: 6, color: '#fff',
@@ -82,6 +84,18 @@ export function EventSearch({ category, onTracked }: Props) {
                     {r.event_date ? new Date(r.event_date).toLocaleDateString() : '—'}
                     {r.city ? ` · ${r.city}` : ''}
                   </div>
+                  {!isTracked && (
+                    <input
+                      value={tickpickUrls[r.ticketmaster_id] || ''}
+                      onChange={e => setTickpickUrls(prev => ({ ...prev, [r.ticketmaster_id]: e.target.value }))}
+                      placeholder="TickPick URL (optional)"
+                      style={{
+                        marginTop: 4, width: '100%', padding: '3px 7px', background: '#0e0e1a',
+                        border: '1px solid #333', borderRadius: 4, color: '#fff',
+                        fontSize: 10, boxSizing: 'border-box', outline: 'none',
+                      }}
+                    />
+                  )}
                 </div>
                 {r.lowest_price != null && (
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399', whiteSpace: 'nowrap' }}>

@@ -5,28 +5,24 @@ interface Props {
   events: Event[];
   selectedId: number | null;
   onSelect: (event: Event) => void;
+  onDelete: (eventId: number) => void;
 }
 
 type SortKey = 'name' | 'latest_price' | 'weekly_change_pct' | 'event_date';
 
-export function EventList({ events, selectedId, onSelect }: Props) {
+export function EventList({ events, selectedId, onSelect, onDelete }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('event_date');
   const [sortAsc, setSortAsc] = useState(true);
-  const [search, setSearch] = useState('');
 
   const sorted = useMemo(() => {
-    const filtered = events.filter(e =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      (e.city ?? '').toLowerCase().includes(search.toLowerCase())
-    );
-    return [...filtered].sort((a, b) => {
+    return [...events].sort((a, b) => {
       const av = a[sortKey] ?? (sortAsc ? Infinity : -Infinity);
       const bv = b[sortKey] ?? (sortAsc ? Infinity : -Infinity);
       if (av < bv) return sortAsc ? -1 : 1;
       if (av > bv) return sortAsc ? 1 : -1;
       return 0;
     });
-  }, [events, sortKey, sortAsc, search]);
+  }, [events, sortKey, sortAsc]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a);
@@ -35,18 +31,6 @@ export function EventList({ events, selectedId, onSelect }: Props) {
 
   return (
     <div style={{ width: 280, borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', background: '#161622' }}>
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
-        <input
-          placeholder="Search events..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            width: '100%', padding: '6px 10px', background: '#0e0e1a',
-            border: '1px solid #333', borderRadius: 6, color: '#fff',
-            fontSize: 13, boxSizing: 'border-box',
-          }}
-        />
-      </div>
       <div style={{ display: 'flex', gap: 4, padding: '6px 12px', borderBottom: '1px solid #222', fontSize: 11, opacity: 0.5 }}>
         {(['event_date', 'latest_price', 'weekly_change_pct'] as SortKey[]).map(k => (
           <button key={k} onClick={() => handleSort(k)} style={{
@@ -75,9 +59,20 @@ export function EventList({ events, selectedId, onSelect }: Props) {
                 borderLeft: isSelected ? '3px solid #a78bfa' : '3px solid transparent',
                 background: isSelected ? '#2a2a3e' : 'transparent',
                 cursor: 'pointer',
+                position: 'relative',
               }}
             >
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{event.name}</div>
+              <button
+                onClick={e => { e.stopPropagation(); onDelete(event.id); }}
+                style={{
+                  position: 'absolute', top: 8, right: 8,
+                  background: 'none', border: 'none', color: '#ffffff30',
+                  cursor: 'pointer', fontSize: 13, padding: '0 2px',
+                  lineHeight: 1,
+                }}
+                title="Remove"
+              >✕</button>
+              <div style={{ fontWeight: 600, fontSize: 13, paddingRight: 16 }}>{event.name}</div>
               {event.city && (
                 <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
                   {event.event_date ? new Date(event.event_date).toLocaleDateString() : '—'} · {event.city}

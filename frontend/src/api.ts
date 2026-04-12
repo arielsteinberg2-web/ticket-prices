@@ -32,3 +32,7 @@ export async function trackEvent(result: SearchResult): Promise<{ status: string
   const { data } = await base.post('/track', result);
   return data;
 }
+
+export async function deleteEvent(eventId: number): Promise<void> {
+  await base.delete(`/events/${eventId}`);
+}

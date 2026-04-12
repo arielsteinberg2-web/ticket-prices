@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+apscheduler
+pydantic
+python-dotenv
+pyyaml
+requests
+numpy
+scikit-learn
