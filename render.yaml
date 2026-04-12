@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: ticket-prices-tracker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DB_PATH
+        value: /app/data/prices.db
+      - key: TICKETMASTER_API_KEY
+        sync: false
+      - key: TICKPICK_TOKEN
+        sync: false
+      - key: GMAIL_USER
+        value: arielsteinberg2@gmail.com
+      - key: GMAIL_APP_PASSWORD
+        sync: false
