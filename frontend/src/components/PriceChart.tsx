@@ -10,12 +10,12 @@ interface Props {
 }
 
 function formatTick(iso: string) {
-  const d = new Date(iso);
-  const mo = (d.getMonth() + 1).toString().padStart(2, '0');
-  const day = d.getDate().toString().padStart(2, '0');
-  const hr = d.getHours().toString().padStart(2, '0');
-  const mn = d.getMinutes().toString().padStart(2, '0');
-  return `${mo}/${day} ${hr}:${mn}`;
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+    hour12: false,
+  });
 }
 
 export function PriceChart({ snapshots, slope }: Props) {
