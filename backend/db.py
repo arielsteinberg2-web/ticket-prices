@@ -46,8 +46,11 @@ class PriceAlert(Base):
 def init_db(engine=None):
     global _SessionFactory
     if engine is None:
-        from backend.config import DB_PATH
-        engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+        from backend.config import DB_PATH, DATABASE_URL
+        if DATABASE_URL:
+            engine = create_engine(DATABASE_URL)
+        else:
+            engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
 
     # Add source column if it doesn't exist (migration for existing DBs)
