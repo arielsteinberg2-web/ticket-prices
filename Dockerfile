@@ -23,6 +23,9 @@ RUN cd frontend && npm run build
 COPY backend/ backend/
 COPY watchlist.yaml .
 
+# Create data directory for SQLite DB
+RUN mkdir -p /app/data
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
