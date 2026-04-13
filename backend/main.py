@@ -45,11 +45,11 @@ if os.path.isdir(FRONTEND_DIST):
     def serve_og_image():
         return FileResponse(os.path.join(FRONTEND_DIST, "og-image.png"), media_type="image/png")
 
-    _index_html: str | None = None
+    _index_html = None
 
     @app.get("/{full_path:path}")
     def serve_frontend(request: Request, full_path: str):
-        nonlocal _index_html
+        global _index_html
         if _index_html is None:
             with open(os.path.join(FRONTEND_DIST, "index.html"), encoding="utf-8") as f:
                 _index_html = f.read()
