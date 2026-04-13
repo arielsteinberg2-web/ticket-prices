@@ -5,6 +5,7 @@ import { WorldCupGrid } from './components/WorldCupGrid';
 import { PriceChart } from './components/PriceChart';
 import { BuyRecommendation } from './components/BuyRecommendation';
 import { EventSearch } from './components/EventSearch';
+import { LocationFilter } from './components/LocationFilter';
 
 const TABS: { key: Category; label: string; emoji: string }[] = [
   { key: 'world_cup', label: 'World Cup 2026', emoji: '⚽' },
@@ -21,6 +22,7 @@ export default function App() {
   const [fetching, setFetching] = useState(false);
   const [quantity, setQuantityState] = useState<Record<Category, number>>({ world_cup: 1, events: 1 });
   const [settingQty, setSettingQty] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<Record<Category, string>>({ world_cup: '', events: '' });
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [tokenDays, setTokenDays] = useState<number | null>(null);
 
@@ -48,6 +50,7 @@ export default function App() {
     setSnapshots([]);
     setPrediction(null);
     loadEvents(activeTab);
+    setLocationFilter(prev => ({ ...prev, [activeTab]: '' }));
   }, [activeTab, loadEvents]);
 
   useEffect(() => {
@@ -157,22 +160,22 @@ export default function App() {
               <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup', true)} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px' }}>
-              <span style={{ fontSize: 11, opacity: 0.3 }}>{events.length} games tracked</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟 Tickets:</span>
-                <select
-                  value={quantity[activeTab]}
-                  onChange={e => handleQuantityChange(Number(e.target.value))}
-                  disabled={settingQty}
-                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}
-                >
+              <span style={{ fontSize: 11, opacity: 0.3 }}>
+                {events.filter(e => !locationFilter['world_cup'] || e.city === locationFilter['world_cup']).length} games
+                {locationFilter['world_cup'] && ` in ${locationFilter['world_cup']}`}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+                <LocationFilter events={events} value={locationFilter['world_cup']} onChange={c => setLocationFilter(prev => ({ ...prev, world_cup: c }))} />
+                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟</span>
+                <select value={quantity[activeTab]} onChange={e => handleQuantityChange(Number(e.target.value))} disabled={settingQty}
+                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 {settingQty && <span style={{ fontSize: 11, opacity: 0.4 }}>Updating…</span>}
               </div>
             </div>
             <WorldCupGrid
-              events={events}
+              events={events.filter(e => !locationFilter['world_cup'] || e.city === locationFilter['world_cup'])}
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
@@ -193,22 +196,22 @@ export default function App() {
               <EventSearch category="events" onTracked={() => loadEvents('events', true)} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px' }}>
-              <span style={{ fontSize: 11, opacity: 0.3 }}>{events.length} events tracked</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟 Tickets:</span>
-                <select
-                  value={quantity[activeTab]}
-                  onChange={e => handleQuantityChange(Number(e.target.value))}
-                  disabled={settingQty}
-                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}
-                >
+              <span style={{ fontSize: 11, opacity: 0.3 }}>
+                {events.filter(e => !locationFilter['events'] || e.city === locationFilter['events']).length} events
+                {locationFilter['events'] && ` in ${locationFilter['events']}`}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+                <LocationFilter events={events} value={locationFilter['events']} onChange={c => setLocationFilter(prev => ({ ...prev, events: c }))} />
+                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟</span>
+                <select value={quantity[activeTab]} onChange={e => handleQuantityChange(Number(e.target.value))} disabled={settingQty}
+                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}>
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 {settingQty && <span style={{ fontSize: 11, opacity: 0.4 }}>Updating…</span>}
               </div>
             </div>
             <WorldCupGrid
-              events={events}
+              events={events.filter(e => !locationFilter['events'] || e.city === locationFilter['events'])}
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
