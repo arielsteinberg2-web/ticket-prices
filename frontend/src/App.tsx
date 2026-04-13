@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Category, Event, PriceSnapshot, Prediction } from './types';
 import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus } from './api';
-import { EventList } from './components/EventList';
 import { WorldCupGrid } from './components/WorldCupGrid';
 import { PriceChart } from './components/PriceChart';
 import { BuyRecommendation } from './components/BuyRecommendation';
@@ -150,40 +149,28 @@ export default function App() {
           )}
         </div>
       ) : (
-        /* Events tab — sidebar + detail panel */
-        <div style={{ display: 'flex', height: 'calc(100vh - 49px)', overflow: 'hidden' }}>
-          {/* Left panel */}
-          <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid #222', display: 'flex', flexDirection: 'column', background: '#111118', overflow: 'hidden' }}>
-            <EventSearch
-              category={activeTab}
-              onTracked={() => loadEvents(activeTab)}
-              events={events}
-              onSelect={e => setSelectedEvent(e)}
-            />
-            <div style={{ padding: '6px 14px 4px', fontSize: 11, opacity: 0.3, letterSpacing: 0.5 }}>
-              {events.length} tracked events
+        /* Events tab — card grid + detail panel */
+        <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
+          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
+            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111' }}>
+              <EventSearch category="events" onTracked={() => loadEvents('events')} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
-            <EventList
+            <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
+              {events.length} events tracked
+            </div>
+            <WorldCupGrid
               events={events}
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
             />
           </div>
-
-          {/* Detail panel */}
-          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a', padding: '28px 32px' }}>
-            {selectedEvent ? (
-              <div style={{ maxWidth: 680, margin: '0 auto' }}>
-                <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
-                <PriceChart snapshots={snapshots} slope={prediction?.slope} />
-              </div>
-            ) : (
-              <div style={{ opacity: 0.3, marginTop: 80, textAlign: 'center', fontSize: 14 }}>
-                Select an event to see its price history
-              </div>
-            )}
-          </div>
+          {selectedEvent && (
+            <div style={{ width: 380, borderLeft: '1px solid #333', padding: '20px 24px', overflowY: 'auto', background: '#13131f', flexShrink: 0 }}>
+              <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
+              <PriceChart snapshots={snapshots} slope={prediction?.slope} />
+            </div>
+          )}
         </div>
       )}
     </div>
