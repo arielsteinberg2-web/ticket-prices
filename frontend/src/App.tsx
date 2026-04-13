@@ -244,22 +244,31 @@ export default function App() {
         </div>
       )}
 
+      {/* Mobile: backdrop */}
+      {isMobile && selectedEvent && (
+        <div
+          onClick={() => setSelectedEvent(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 299, background: '#00000070', backdropFilter: 'blur(2px)' }}
+        />
+      )}
+
       {/* Mobile: bottom sheet detail panel */}
       {isMobile && selectedEvent && (
         <div style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 300,
-          background: '#13131f', borderTop: '1px solid #2a2a3a',
-          borderRadius: '18px 18px 0 0',
-          padding: '0 20px 40px',
-          maxHeight: '72vh', overflowY: 'auto',
-          boxShadow: '0 -12px 48px #00000080',
+          background: '#1e1e30',
+          borderTop: '2px solid #a78bfa',
+          borderRadius: '20px 20px 0 0',
+          padding: '0 20px 44px',
+          maxHeight: '75vh', overflowY: 'auto',
+          boxShadow: '0 -20px 60px #000000cc',
         }}>
           {/* Drag handle */}
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#ffffff20' }} />
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 6px' }}>
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: '#a78bfa60' }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#ffffff60', maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {selectedEvent.name}
             </span>
             <button
