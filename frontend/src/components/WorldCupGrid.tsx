@@ -42,9 +42,10 @@ interface Props {
   onSelect: (event: Event) => void;
   onDelete: (eventId: number) => void;
   showTeams?: boolean;
+  quantity?: number;
 }
 
-export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams = true }: Props) {
+export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams = true, quantity = 1 }: Props) {
   const sorted = [...events].sort((a, b) => {
     if (!a.event_date) return 1;
     if (!b.event_date) return -1;
@@ -62,6 +63,8 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams
       {sorted.map(event => {
         const isSelected = event.id === selectedId;
         const teams = showTeams ? extractTeams(event.name) : [];
+        // Use pre-fetched price for selected quantity if available, else fall back to server value
+        const displayPrice = (event.prices_by_qty?.[quantity] ?? event.latest_price);
         const change = event.weekly_change_pct;
         const changeColor = change == null ? '#fff' : change > 0 ? '#f59e0b' : '#34d399';
         const changeBg   = change == null ? 'transparent' : change > 0 ? '#3a2a1a' : '#1a3a2a';
@@ -115,9 +118,9 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams
 
             <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {event.latest_price != null ? (
+                {displayPrice != null ? (
                   <span style={{ fontWeight: 700, fontSize: 16, color: changeColor }}>
-                    ${event.latest_price.toFixed(0)}
+                    ${displayPrice.toFixed(0)}
                     {event.price_source === 'seatgeek' && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>via SeatGeek</span>}
                     {event.price_source === 'tickpick' && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 4 }}>via TickPick</span>}
                   </span>

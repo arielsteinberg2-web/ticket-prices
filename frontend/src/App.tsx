@@ -21,7 +21,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [quantity, setQuantityState] = useState<Record<Category, number>>({ world_cup: 1, events: 1 });
-  const [settingQty, setSettingQty] = useState(false);
+  const [settingQty] = useState(false);
   const [locationFilter, setLocationFilter] = useState<Record<Category, string>>({ world_cup: '', events: '' });
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [tokenDays, setTokenDays] = useState<number | null>(null);
@@ -66,23 +66,19 @@ export default function App() {
     });
   }, [selectedEvent]);
 
-  const handleQuantityChange = async (q: number) => {
-    setSettingQty(true);
-    try {
-      await setQuantity(activeTab, q);
-      setQuantityState(prev => ({ ...prev, [activeTab]: q }));
-      await loadEvents(activeTab, true);
-      // Reload chart + prediction for selected event (now filtered by new quantity)
-      if (selectedEvent) {
-        const [hist, pred] = await Promise.all([
-          fetchHistory(selectedEvent.id),
-          fetchPrediction(selectedEvent.id),
-        ]);
+  const handleQuantityChange = (q: number) => {
+    setQuantityState(prev => ({ ...prev, [activeTab]: q }));
+    // Fire-and-forget: persist preference to DB (no await — don't block UI)
+    setQuantity(activeTab, q).catch(() => {});
+    // Reload chart + prediction for selected event with new quantity
+    if (selectedEvent) {
+      Promise.all([
+        fetchHistory(selectedEvent.id, q),
+        fetchPrediction(selectedEvent.id, q),
+      ]).then(([hist, pred]) => {
         setSnapshots(hist);
         setPrediction(pred);
-      }
-    } finally {
-      setSettingQty(false);
+      });
     }
   };
 
@@ -188,6 +184,7 @@ export default function App() {
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
+              quantity={quantity['world_cup']}
             />
           </div>
           {selectedEvent && (
@@ -225,6 +222,7 @@ export default function App() {
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
               showTeams={false}
+              quantity={quantity['events']}
             />
           </div>
           {selectedEvent && (

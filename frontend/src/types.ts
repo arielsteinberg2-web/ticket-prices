@@ -13,6 +13,7 @@ export interface Event {
   snapshot_count: number;
   price_source?: string | null;
   price_history?: number[];
+  prices_by_qty?: Record<number, number>;
 }
 
 export interface PriceSnapshot {

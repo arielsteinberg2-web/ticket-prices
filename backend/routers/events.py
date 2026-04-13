@@ -44,11 +44,18 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
     for event in events:
         qty = event.quantity or 1
         all_snaps = sorted(event.snapshots, key=lambda s: s.fetched_at)
-        # Use quantity-matched snapshots for display; fall back to qty=1 for old rows
-        qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty]
-        if not qty_snaps:
-            qty_snaps = all_snaps  # fallback for legacy data
-        latest_price = qty_snaps[-1].lowest_price if qty_snaps else None
+
+        # Build prices_by_qty: latest price for each quantity (1-6)
+        prices_by_qty: dict[int, float] = {}
+        for q in range(1, 7):
+            q_snaps = [s for s in all_snaps if (s.quantity or 1) == q]
+            if q_snaps:
+                prices_by_qty[q] = q_snaps[-1].lowest_price
+
+        # Use quantity-matched snapshots for display; fall back to all for old rows
+        qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
+        latest_price = prices_by_qty.get(qty) or (qty_snaps[-1].lowest_price if qty_snaps else None)
+
         week_ago_snap = qty_snaps[-8] if len(qty_snaps) >= 8 else (qty_snaps[0] if qty_snaps else None)
         weekly_change = None
         if latest_price and week_ago_snap and week_ago_snap.lowest_price:
@@ -68,6 +75,7 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             "snapshot_count": len(qty_snaps),
             "price_source": qty_snaps[-1].source if qty_snaps else None,
             "price_history": [s.lowest_price for s in qty_snaps[-20:]],
+            "prices_by_qty": prices_by_qty,
         })
     return result
 
@@ -84,15 +92,13 @@ def delete_event(event_id: int, db: Session = Depends(get_session)):
 
 
 @router.get("/events/{event_id}/history")
-def get_history(event_id: int, db: Session = Depends(get_session)):
+def get_history(event_id: int, quantity: int = None, db: Session = Depends(get_session)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    qty = event.quantity or 1
+    qty = quantity or event.quantity or 1
     all_snaps = sorted(list(event.snapshots), key=lambda s: s.fetched_at)
-    snapshots = [s for s in all_snaps if (s.quantity or 1) == qty]
-    if not snapshots:
-        snapshots = all_snaps  # fallback for legacy data
+    snapshots = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
     return [
         {"fetched_at": s.fetched_at.isoformat(), "lowest_price": s.lowest_price}
         for s in snapshots
@@ -100,12 +106,14 @@ def get_history(event_id: int, db: Session = Depends(get_session)):
 
 
 @router.get("/events/{event_id}/prediction")
-def get_prediction(event_id: int, db: Session = Depends(get_session)):
+def get_prediction(event_id: int, quantity: int = None, db: Session = Depends(get_session)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    snapshots = sorted(list(event.snapshots), key=lambda s: s.fetched_at)
+    qty = quantity or event.quantity or 1
+    all_snaps = sorted(list(event.snapshots), key=lambda s: s.fetched_at)
+    snapshots = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
     prices = [(s.fetched_at.date(), s.lowest_price) for s in snapshots]
     event_date = event.event_date.date() if event.event_date else None
 

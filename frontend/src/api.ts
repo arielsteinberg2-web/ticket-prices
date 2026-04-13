@@ -9,13 +9,15 @@ export async function fetchEvents(category?: Category): Promise<Event[]> {
   return data;
 }
 
-export async function fetchHistory(eventId: number): Promise<PriceSnapshot[]> {
-  const { data } = await base.get<PriceSnapshot[]>(`/events/${eventId}/history`);
+export async function fetchHistory(eventId: number, quantity?: number): Promise<PriceSnapshot[]> {
+  const params = quantity ? { quantity } : {};
+  const { data } = await base.get<PriceSnapshot[]>(`/events/${eventId}/history`, { params });
   return data;
 }
 
-export async function fetchPrediction(eventId: number): Promise<Prediction> {
-  const { data } = await base.get<Prediction>(`/events/${eventId}/prediction`);
+export async function fetchPrediction(eventId: number, quantity?: number): Promise<Prediction> {
+  const params = quantity ? { quantity } : {};
+  const { data } = await base.get<Prediction>(`/events/${eventId}/prediction`, { params });
   return data;
 }
 
