@@ -128,7 +128,7 @@ export default function App() {
         /* World Cup — card grid + detail panel */
         <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
           <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
-            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111' }}>
+            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
               <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup')} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
             <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
@@ -152,7 +152,7 @@ export default function App() {
         /* Events tab — card grid + detail panel */
         <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
           <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
-            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111' }}>
+            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
               <EventSearch category="events" onTracked={() => loadEvents('events')} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
             <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
@@ -163,6 +163,7 @@ export default function App() {
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
+              showTeams={false}
             />
           </div>
           {selectedEvent && (

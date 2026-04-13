@@ -41,9 +41,10 @@ interface Props {
   selectedId: number | null;
   onSelect: (event: Event) => void;
   onDelete: (eventId: number) => void;
+  showTeams?: boolean;
 }
 
-export function WorldCupGrid({ events, selectedId, onSelect, onDelete }: Props) {
+export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams = true }: Props) {
   const sorted = [...events].sort((a, b) => {
     if (!a.event_date) return 1;
     if (!b.event_date) return -1;
@@ -60,7 +61,7 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete }: Props) 
     }}>
       {sorted.map(event => {
         const isSelected = event.id === selectedId;
-        const teams = extractTeams(event.name);
+        const teams = showTeams ? extractTeams(event.name) : [];
         const change = event.weekly_change_pct;
         const changeColor = change == null ? '#fff' : change > 0 ? '#f59e0b' : '#34d399';
         const changeBg   = change == null ? 'transparent' : change > 0 ? '#3a2a1a' : '#1a3a2a';

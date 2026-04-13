@@ -14,6 +14,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
+  const [tracking, setTracking] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -45,9 +46,16 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   }, [query]);
 
   const handleTrack = async (result: SearchResult) => {
-    await trackEvent({ ...result, category });
-    setTracked(prev => new Set([...prev, result.ticketmaster_id]));
-    onTracked();
+    setTracking(prev => new Set([...prev, result.ticketmaster_id]));
+    try {
+      await trackEvent({ ...result, category });
+      setTracked(prev => new Set([...prev, result.ticketmaster_id]));
+      onTracked();
+    } catch {
+      setError('Failed to track event. Try again.');
+    } finally {
+      setTracking(prev => { const s = new Set(prev); s.delete(result.ticketmaster_id); return s; });
+    }
   };
 
   const handleSelectLocal = (event: Event) => {
@@ -146,17 +154,18 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
                   </span>
                 )}
                 <button
-                  onClick={ev => { ev.stopPropagation(); !isTracked && handleTrack(r); }}
-                  disabled={isTracked}
+                  onClick={ev => { ev.stopPropagation(); !isTracked && !tracking.has(r.ticketmaster_id) && handleTrack(r); }}
+                  disabled={isTracked || tracking.has(r.ticketmaster_id)}
                   style={{
                     padding: '4px 10px', borderRadius: 5, fontSize: 11, whiteSpace: 'nowrap',
                     background: isTracked ? '#1a3a2a' : '#a78bfa20',
                     border: `1px solid ${isTracked ? '#34d399' : '#a78bfa50'}`,
                     color: isTracked ? '#34d399' : '#a78bfa',
-                    cursor: isTracked ? 'default' : 'pointer',
+                    cursor: (isTracked || tracking.has(r.ticketmaster_id)) ? 'default' : 'pointer',
+                    opacity: tracking.has(r.ticketmaster_id) ? 0.5 : 1,
                   }}
                 >
-                  {isTracked ? '✓ Tracked' : '+ Track'}
+                  {tracking.has(r.ticketmaster_id) ? '…' : isTracked ? '✓ Tracked' : '+ Track'}
                 </button>
               </div>
             );
