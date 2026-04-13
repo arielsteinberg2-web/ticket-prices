@@ -21,7 +21,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
-  const [showSearch] = useState(true);
   const [tokenDays, setTokenDays] = useState<number | null>(null);
 
   useEffect(() => {
