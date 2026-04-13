@@ -7,6 +7,7 @@ export interface Event {
   event_date: string | null;
   venue: string | null;
   city: string | null;
+  quantity: number;
   latest_price: number | null;
   weekly_change_pct: number | null;
   snapshot_count: number;

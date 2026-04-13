@@ -20,6 +20,7 @@ class Event(Base):
     event_date = Column(DateTime, nullable=True)
     venue = Column(String, nullable=True)
     city = Column(String, nullable=True)
+    quantity = Column(Integer, nullable=False, default=1)
     snapshots = relationship("PriceSnapshot", back_populates="event", lazy="select")
 
 
@@ -73,6 +74,14 @@ def init_db(engine=None):
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE events ADD COLUMN tickpick_id VARCHAR"))
+            conn.commit()
+    except Exception:
+        pass  # Column already exists
+
+    # Add quantity column if it doesn't exist
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE events ADD COLUMN quantity INTEGER DEFAULT 1"))
             conn.commit()
     except Exception:
         pass  # Column already exists

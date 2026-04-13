@@ -80,8 +80,8 @@ def extract_tickpick_id(url: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
-def fetch_tickpick_price(tickpick_id: str, token: str) -> Optional[float]:
-    """Return the lowest listing price for a TickPick event, or None."""
+def fetch_tickpick_price(tickpick_id: str, token: str, quantity: int = 1) -> Optional[float]:
+    """Return the lowest listing price for a TickPick event for the given quantity, or None."""
     try:
         resp = requests.get(
             f"{BASE_URL}/{tickpick_id}",
@@ -92,12 +92,13 @@ def fetch_tickpick_price(tickpick_id: str, token: str) -> Optional[float]:
             logger.warning("TickPick listings returned %d for event %s", resp.status_code, tickpick_id)
             return None
         listings = resp.json().get("listings", [])
-        # Exclude parking passes ("pk" tag or section name contains "PARKING")
+        # Exclude parking; filter by quantity available
         ticket_listings = [
             l for l in listings
             if l.get("p") is not None
             and "pk" not in (l.get("d") or [])
             and "PARKING" not in (l.get("r") or "").upper()
+            and l.get("q", 1) >= quantity
         ]
         prices = [l["p"] for l in ticket_listings]
         return min(prices) if prices else None

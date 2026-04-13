@@ -149,7 +149,8 @@ def run_fetch_job(db: Session = None, force: bool = False):
         if TICKPICK_TOKEN:
             tp_events = db.query(Event).filter(Event.tickpick_id.isnot(None)).all()
             for event in tp_events:
-                price = fetch_tickpick_price(event.tickpick_id, TICKPICK_TOKEN)
+                qty = event.quantity or 1
+                price = fetch_tickpick_price(event.tickpick_id, TICKPICK_TOKEN, quantity=qty)
                 if price is not None:
                     db.add(PriceSnapshot(
                         event_id=event.id,
@@ -157,7 +158,7 @@ def run_fetch_job(db: Session = None, force: bool = False):
                         lowest_price=price,
                         source="tickpick",
                     ))
-                    logger.info("TickPick price for %s: $%.0f", event.name, price)
+                    logger.info("TickPick price for %s (qty %d): $%.0f", event.name, qty, price)
 
         db.commit()
         logger.info("Fetch job complete at %s", now.isoformat())

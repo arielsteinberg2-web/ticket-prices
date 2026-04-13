@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Category, Event, PriceSnapshot, Prediction } from './types';
-import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus } from './api';
+import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus, setQuantity } from './api';
 import { WorldCupGrid } from './components/WorldCupGrid';
 import { PriceChart } from './components/PriceChart';
 import { BuyRecommendation } from './components/BuyRecommendation';
@@ -19,6 +19,8 @@ export default function App() {
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [quantity, setQuantityState] = useState<Record<Category, number>>({ world_cup: 1, events: 1 });
+  const [settingQty, setSettingQty] = useState(false);
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [tokenDays, setTokenDays] = useState<number | null>(null);
 
@@ -32,6 +34,10 @@ export default function App() {
       const data = await fetchEvents(category);
       setEvents(data);
       if (!silent) setSelectedEvent(prev => prev ?? (data[0] ?? null));
+      // Sync quantity dropdown to what's stored in DB (use first event's quantity)
+      if (data.length > 0 && data[0].quantity) {
+        setQuantityState(prev => ({ ...prev, [category]: data[0].quantity }));
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -56,6 +62,17 @@ export default function App() {
       setPrediction(pred);
     });
   }, [selectedEvent]);
+
+  const handleQuantityChange = async (q: number) => {
+    setSettingQty(true);
+    try {
+      await setQuantity(activeTab, q);
+      setQuantityState(prev => ({ ...prev, [activeTab]: q }));
+      await loadEvents(activeTab, true);
+    } finally {
+      setSettingQty(false);
+    }
+  };
 
   const handleDelete = async (eventId: number) => {
     await deleteEvent(eventId);
@@ -139,8 +156,20 @@ export default function App() {
             <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
               <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup', true)} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
-            <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
-              {events.length} games tracked
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px' }}>
+              <span style={{ fontSize: 11, opacity: 0.3 }}>{events.length} games tracked</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟 Tickets:</span>
+                <select
+                  value={quantity[activeTab]}
+                  onChange={e => handleQuantityChange(Number(e.target.value))}
+                  disabled={settingQty}
+                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}
+                >
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                {settingQty && <span style={{ fontSize: 11, opacity: 0.4 }}>Updating…</span>}
+              </div>
             </div>
             <WorldCupGrid
               events={events}
@@ -163,8 +192,20 @@ export default function App() {
             <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
               <EventSearch category="events" onTracked={() => loadEvents('events', true)} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
-            <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
-              {events.length} events tracked
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px' }}>
+              <span style={{ fontSize: 11, opacity: 0.3 }}>{events.length} events tracked</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟 Tickets:</span>
+                <select
+                  value={quantity[activeTab]}
+                  onChange={e => handleQuantityChange(Number(e.target.value))}
+                  disabled={settingQty}
+                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}
+                >
+                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                {settingQty && <span style={{ fontSize: 11, opacity: 0.4 }}>Updating…</span>}
+              </div>
             </div>
             <WorldCupGrid
               events={events}

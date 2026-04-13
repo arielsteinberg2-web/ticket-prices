@@ -57,6 +57,7 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             "event_date": event.event_date.isoformat() if event.event_date else None,
             "venue": event.venue,
             "city": event.city,
+            "quantity": event.quantity or 1,
             "latest_price": latest_price,
             "weekly_change_pct": weekly_change,
             "snapshot_count": len(snapshots),
@@ -139,6 +140,36 @@ def get_status():
             pass
 
     return {"tickpick_token": token_info}
+
+
+class QuantityRequest(BaseModel):
+    category: str
+    quantity: int
+
+
+@router.post("/quantity")
+def set_category_quantity(body: QuantityRequest, db: Session = Depends(get_session)):
+    """Set ticket quantity for all events in a category and re-fetch TickPick prices."""
+    if not (1 <= body.quantity <= 6):
+        raise HTTPException(status_code=400, detail="Quantity must be 1-6")
+    events = db.query(Event).filter(Event.category == body.category).all()
+    for event in events:
+        event.quantity = body.quantity
+    db.commit()
+
+    # Re-fetch TickPick prices immediately with new quantity
+    from backend.config import TICKPICK_TOKEN
+    from backend.tickpick_fetcher import fetch_tickpick_price
+    if TICKPICK_TOKEN:
+        now = __import__('datetime').datetime.utcnow()
+        for event in events:
+            if event.tickpick_id:
+                price = fetch_tickpick_price(event.tickpick_id, TICKPICK_TOKEN, quantity=body.quantity)
+                if price is not None:
+                    db.add(PriceSnapshot(event_id=event.id, fetched_at=now, lowest_price=price, source="tickpick"))
+        db.commit()
+
+    return {"status": "ok", "updated": len(events)}
 
 
 @router.post("/fetch")

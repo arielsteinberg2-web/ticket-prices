@@ -37,6 +37,10 @@ export async function deleteEvent(eventId: number): Promise<void> {
   await base.delete(`/events/${eventId}`);
 }
 
+export async function setQuantity(category: string, quantity: number): Promise<void> {
+  await base.post('/quantity', { category, quantity });
+}
+
 export async function fetchStatus(): Promise<any> {
   const { data } = await base.get('/status');
   return data;

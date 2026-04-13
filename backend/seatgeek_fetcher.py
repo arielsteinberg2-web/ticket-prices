@@ -10,7 +10,7 @@ PAGE_SIZE = 100
 MAX_RETRIES = 3
 
 
-def fetch_seatgeek_events(keyword: str, client_id: str) -> list[dict]:
+def fetch_seatgeek_events(keyword: str, client_id: str, quantity: int = 1) -> list[dict]:
     """Fetch all SeatGeek events matching keyword. Returns raw event dicts."""
     events = []
     page = 1
@@ -18,12 +18,15 @@ def fetch_seatgeek_events(keyword: str, client_id: str) -> list[dict]:
     while True:
         for attempt in range(MAX_RETRIES):
             try:
-                resp = requests.get(BASE_URL, params={
+                params = {
                     "q": keyword,
                     "client_id": client_id,
                     "per_page": PAGE_SIZE,
                     "page": page,
-                }, timeout=10)
+                }
+                if quantity > 1:
+                    params["quantity"] = quantity
+                resp = requests.get(BASE_URL, params=params, timeout=10)
                 if resp.status_code == 429:
                     import time
                     time.sleep(2 ** attempt)
