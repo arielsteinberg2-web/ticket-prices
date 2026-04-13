@@ -178,7 +178,8 @@ def run_fetch_job(db: Session = None, force: bool = False):
 
 
 def start_scheduler() -> BackgroundScheduler:
-    """Start APScheduler to run run_fetch_job daily at 09:00 local time."""
+    """Start APScheduler to run run_fetch_job every 4 hours, immediately on startup."""
+    import datetime
     scheduler = BackgroundScheduler()
     scheduler.add_job(
         run_fetch_job,
@@ -186,7 +187,8 @@ def start_scheduler() -> BackgroundScheduler:
         hours=4,
         id="price_fetch",
         replace_existing=True,
+        next_run_time=datetime.datetime.now(),  # run immediately on startup
     )
     scheduler.start()
-    logger.info("Scheduler started — price fetch every 4 hours")
+    logger.info("Scheduler started — price fetch every 4 hours (first run: now)")
     return scheduler
