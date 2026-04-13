@@ -30,7 +30,7 @@ export function EventList({ events, selectedId, onSelect, onDelete }: Props) {
   };
 
   return (
-    <div style={{ width: 280, borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', background: '#161622' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ display: 'flex', gap: 4, padding: '6px 12px', borderBottom: '1px solid #222', fontSize: 11, opacity: 0.5 }}>
         {(['event_date', 'latest_price', 'weekly_change_pct'] as SortKey[]).map(k => (
           <button key={k} onClick={() => handleSort(k)} style={{

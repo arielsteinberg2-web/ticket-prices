@@ -152,22 +152,18 @@ export default function App() {
         </div>
       ) : (
         /* Events tab — sidebar + detail panel */
-        <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
+        <div style={{ display: 'flex', height: 'calc(100vh - 49px)', overflow: 'hidden' }}>
           {/* Left panel */}
-          <div style={{ width: 280, borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', background: '#161622' }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
-              <span style={{ fontSize: 11, opacity: 0.4, textTransform: 'uppercase', letterSpacing: 1 }}>
-                {events.length} tracked events
-              </span>
+          <div style={{ width: 320, flexShrink: 0, borderRight: '1px solid #222', display: 'flex', flexDirection: 'column', background: '#111118', overflow: 'hidden' }}>
+            <EventSearch
+              category={activeTab}
+              onTracked={() => loadEvents(activeTab)}
+              events={events}
+              onSelect={e => setSelectedEvent(e)}
+            />
+            <div style={{ padding: '6px 14px 4px', fontSize: 11, opacity: 0.3, letterSpacing: 0.5 }}>
+              {events.length} tracked events
             </div>
-            {showSearch && (
-              <EventSearch
-                category={activeTab}
-                onTracked={() => loadEvents(activeTab)}
-                events={events}
-                onSelect={e => setSelectedEvent(e)}
-              />
-            )}
             <EventList
               events={events}
               selectedId={selectedEvent?.id ?? null}
@@ -177,14 +173,14 @@ export default function App() {
           </div>
 
           {/* Detail panel */}
-          <div style={{ flex: 1, padding: '20px 24px', overflowY: 'auto', background: '#13131f' }}>
+          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a', padding: '28px 32px' }}>
             {selectedEvent ? (
-              <>
+              <div style={{ maxWidth: 680, margin: '0 auto' }}>
                 <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
                 <PriceChart snapshots={snapshots} slope={prediction?.slope} />
-              </>
+              </div>
             ) : (
-              <div style={{ opacity: 0.3, marginTop: 60, textAlign: 'center' }}>
+              <div style={{ opacity: 0.3, marginTop: 80, textAlign: 'center', fontSize: 14 }}>
                 Select an event to see its price history
               </div>
             )}

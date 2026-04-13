@@ -52,29 +52,29 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   const showLocalSuggestions = localMatches.length > 0 && results.length === 0;
 
   return (
-    <div style={{ padding: '12px 14px', borderBottom: '1px solid #333', background: '#0e0e1a' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+    <div style={{ padding: '10px 12px', borderBottom: '1px solid #222', background: '#111118' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: showLocalSuggestions || results.length > 0 || error ? 8 : 0 }}>
         <input
           value={query}
           onChange={e => { setQuery(e.target.value); setResults([]); setError(null); }}
           onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          placeholder={`Search ${category === 'world_cup' ? 'World Cup' : 'any'} events...`}
+          placeholder={`Search ${category === 'world_cup' ? 'World Cup' : ''} events...`}
           style={{
-            flex: 1, padding: '7px 11px', background: '#1a1a2e',
-            border: '1px solid #a78bfa50', borderRadius: 6, color: '#fff',
-            fontSize: 13, outline: 'none',
+            flex: 1, padding: '7px 10px', background: '#1a1a2e',
+            border: '1px solid #333', borderRadius: 6, color: '#fff',
+            fontSize: 12, outline: 'none',
           }}
         />
         <button
           onClick={handleSearch}
           disabled={loading}
           style={{
-            padding: '7px 14px', background: '#a78bfa20', border: '1px solid #a78bfa50',
+            padding: '7px 12px', background: '#a78bfa15', border: '1px solid #a78bfa40',
             color: '#a78bfa', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer',
             fontSize: 12, opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap',
           }}
         >
-          {loading ? '...' : '🔍 Search'}
+          {loading ? '…' : '🔍'}
         </button>
       </div>
 
