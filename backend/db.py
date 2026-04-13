@@ -20,7 +20,7 @@ class Event(Base):
     event_date = Column(DateTime, nullable=True)
     venue = Column(String, nullable=True)
     city = Column(String, nullable=True)
-    snapshots = relationship("PriceSnapshot", back_populates="event", lazy="dynamic")
+    snapshots = relationship("PriceSnapshot", back_populates="event", lazy="select")
 
 
 class PriceSnapshot(Base):

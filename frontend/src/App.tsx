@@ -26,14 +26,14 @@ export default function App() {
     fetchStatus().then(s => setTokenDays(s?.tickpick_token?.days_remaining ?? null));
   }, []);
 
-  const loadEvents = useCallback(async (category: Category) => {
-    setLoading(true);
+  const loadEvents = useCallback(async (category: Category, silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await fetchEvents(category);
       setEvents(data);
-      setSelectedEvent(prev => prev ?? (data[0] ?? null));
+      if (!silent) setSelectedEvent(prev => prev ?? (data[0] ?? null));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -69,6 +69,14 @@ export default function App() {
       await triggerFetch();
       setLastFetch(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }));
       await loadEvents(activeTab);
+      if (selectedEvent) {
+        const [hist, pred] = await Promise.all([
+          fetchHistory(selectedEvent.id),
+          fetchPrediction(selectedEvent.id),
+        ]);
+        setSnapshots(hist);
+        setPrediction(pred);
+      }
     } finally {
       setFetching(false);
     }
@@ -129,7 +137,7 @@ export default function App() {
         <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
           <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
             <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
-              <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup')} events={events} onSelect={e => setSelectedEvent(e)} />
+              <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup', true)} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
             <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
               {events.length} games tracked
@@ -153,7 +161,7 @@ export default function App() {
         <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
           <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
             <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
-              <EventSearch category="events" onTracked={() => loadEvents('events')} events={events} onSelect={e => setSelectedEvent(e)} />
+              <EventSearch category="events" onTracked={() => loadEvents('events', true)} events={events} onSelect={e => setSelectedEvent(e)} />
             </div>
             <div style={{ padding: '6px 8px', fontSize: 11, opacity: 0.3, paddingLeft: 20 }}>
               {events.length} events tracked
