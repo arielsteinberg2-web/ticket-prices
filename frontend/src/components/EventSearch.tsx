@@ -14,7 +14,6 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [tracked, setTracked] = useState<Set<string>>(new Set());
-  const [tickpickUrls, setTickpickUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -46,8 +45,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   }, [query]);
 
   const handleTrack = async (result: SearchResult) => {
-    const tickpick_url = tickpickUrls[result.ticketmaster_id] || undefined;
-    await trackEvent({ ...result, category, tickpick_url });
+    await trackEvent({ ...result, category });
     setTracked(prev => new Set([...prev, result.ticketmaster_id]));
     onTracked();
   };
@@ -61,7 +59,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   const showLocalSuggestions = localMatches.length > 0 && results.length === 0;
 
   return (
-    <div style={{ padding: '10px 12px', borderBottom: '1px solid #222', background: '#111118' }}>
+    <div style={{ padding: '10px 12px', borderBottom: '1px solid #222', background: '#111118', position: 'relative', zIndex: 100 }}>
       <div style={{ display: 'flex', gap: 6, marginBottom: showLocalSuggestions || results.length > 0 || error ? 8 : 0 }}>
         <input
           value={query}
@@ -141,19 +139,6 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
                     {r.event_date ? new Date(r.event_date).toLocaleDateString() : '—'}
                     {r.city ? ` · ${r.city}` : ''}
                   </div>
-                  {!isTracked && (
-                    <input
-                      value={tickpickUrls[r.ticketmaster_id] || ''}
-                      onChange={e => setTickpickUrls(prev => ({ ...prev, [r.ticketmaster_id]: e.target.value }))}
-                      placeholder="TickPick URL (optional)"
-                      onClick={ev => ev.stopPropagation()}
-                      style={{
-                        marginTop: 4, width: '100%', padding: '3px 7px', background: '#0e0e1a',
-                        border: '1px solid #333', borderRadius: 4, color: '#fff',
-                        fontSize: 10, boxSizing: 'border-box', outline: 'none',
-                      }}
-                    />
-                  )}
                 </div>
                 {r.lowest_price != null && (
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#34d399', whiteSpace: 'nowrap' }}>
