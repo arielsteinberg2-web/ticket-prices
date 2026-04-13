@@ -43,9 +43,10 @@ interface Props {
   onDelete: (eventId: number) => void;
   showTeams?: boolean;
   quantity?: number;
+  isMobile?: boolean;
 }
 
-export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams = true, quantity = 1 }: Props) {
+export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams = true, quantity = 1, isMobile = false }: Props) {
   const sorted = [...events].sort((a, b) => {
     if (!a.event_date) return 1;
     if (!b.event_date) return -1;
@@ -55,9 +56,9 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-      gap: 12,
-      padding: '16px 20px',
+      gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? '160px' : '260px'}, 1fr))`,
+      gap: isMobile ? 8 : 12,
+      padding: isMobile ? '10px 12px' : '16px 20px',
       alignContent: 'start',
     }}>
       {sorted.map(event => {
@@ -75,9 +76,9 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams
             onClick={() => onSelect(event)}
             style={{
               background: isSelected ? '#2a2a3e' : '#1a1a2e',
-              border: isSelected ? '1px solid #a78bfa' : '1px solid #2a2a3a',
-              borderRadius: 10, padding: '14px 16px',
-              cursor: 'pointer', position: 'relative', transition: 'border-color 0.15s',
+              border: isSelected ? '1px solid #a78bfa' : 'none',
+              borderRadius: 10, padding: isMobile ? '10px 12px' : '14px 16px',
+              cursor: 'pointer', position: 'relative', transition: 'background 0.15s',
             }}
           >
             <button

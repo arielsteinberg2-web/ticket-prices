@@ -12,6 +12,12 @@ const TABS: { key: Category; label: string; emoji: string }[] = [
   { key: 'events',    label: 'Events',          emoji: '🎭' },
 ];
 
+const SELECT_STYLE: React.CSSProperties = {
+  background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa',
+  borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer',
+  WebkitAppearance: 'none', appearance: 'none',
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Category>('world_cup');
   const [events, setEvents] = useState<Event[]>([]);
@@ -21,10 +27,16 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [quantity, setQuantityState] = useState<Record<Category, number>>({ world_cup: 1, events: 1 });
-  const [settingQty] = useState(false);
   const [locationFilter, setLocationFilter] = useState<Record<Category, string>>({ world_cup: '', events: '' });
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [tokenDays, setTokenDays] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   useEffect(() => {
     fetchStatus().then(s => setTokenDays(s?.tickpick_token?.days_remaining ?? null));
@@ -36,7 +48,6 @@ export default function App() {
       const data = await fetchEvents(category);
       setEvents(data);
       if (!silent) setSelectedEvent(prev => prev ?? (data[0] ?? null));
-      // Sync quantity dropdown to what's stored in DB (use first event's quantity)
       if (data.length > 0 && data[0].quantity) {
         setQuantityState(prev => ({ ...prev, [category]: data[0].quantity }));
       }
@@ -68,9 +79,7 @@ export default function App() {
 
   const handleQuantityChange = (q: number) => {
     setQuantityState(prev => ({ ...prev, [activeTab]: q }));
-    // Fire-and-forget: persist preference to DB (no await — don't block UI)
     setQuantity(activeTab, q).catch(() => {});
-    // Reload chart + prediction for selected event with new quantity
     if (selectedEvent) {
       Promise.all([
         fetchHistory(selectedEvent.id, q),
@@ -107,47 +116,63 @@ export default function App() {
     }
   };
 
+  const loc = locationFilter[activeTab];
+  const filteredEvents = events.filter(e => !loc || e.city === loc);
+
+  const detailPanel = selectedEvent && (
+    <>
+      <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
+      <PriceChart snapshots={snapshots} slope={prediction?.slope} />
+    </>
+  );
+
   return (
     <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, sans-serif' }}>
+
       {/* Top nav */}
-      <div style={{ background: '#111', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center' }}>
-        <div style={{ padding: '12px 20px', fontWeight: 700, fontSize: 15, opacity: 0.9 }}>
-          🎟 Ticket Price Tracker
-        </div>
+      <div style={{ background: '#111', borderBottom: '1px solid #222', display: 'flex', alignItems: 'center', flexWrap: 'nowrap', minHeight: 49 }}>
+        {!isMobile && (
+          <div style={{ padding: '12px 16px', fontWeight: 700, fontSize: 14, opacity: 0.9, whiteSpace: 'nowrap' }}>
+            🎟 Ticket Tracker
+          </div>
+        )}
         <div style={{ display: 'flex', flex: 1 }}>
           {TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               style={{
-                padding: '12px 22px', background: 'none', border: 'none',
+                padding: isMobile ? '12px 16px' : '12px 20px',
+                background: 'none', border: 'none',
                 borderBottom: activeTab === tab.key ? '2px solid #a78bfa' : '2px solid transparent',
-                color: activeTab === tab.key ? '#a78bfa' : '#ffffff80',
+                color: activeTab === tab.key ? '#a78bfa' : '#ffffff70',
                 fontWeight: activeTab === tab.key ? 600 : 400,
-                cursor: 'pointer', fontSize: 13,
+                cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap',
               }}
             >
-              {tab.emoji} {tab.label}
+              {tab.emoji}{isMobile ? '' : ` ${tab.label}`}
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px' }}>
-          {tokenDays !== null && tokenDays <= 14 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px' }}>
+          {!isMobile && tokenDays !== null && tokenDays <= 14 && (
             <span style={{ fontSize: 11, color: tokenDays <= 7 ? '#f87171' : '#f59e0b', fontWeight: 600 }}>
-              ⚠ TickPick token expires in {tokenDays}d
+              ⚠ {tokenDays}d
             </span>
           )}
-          {lastFetch && <span style={{ fontSize: 11, opacity: 0.4 }}>Last fetch: {lastFetch}</span>}
+          {!isMobile && lastFetch && (
+            <span style={{ fontSize: 11, opacity: 0.35 }}>↑ {lastFetch}</span>
+          )}
           <button
             onClick={handleFetch}
             disabled={fetching}
             style={{
-              padding: '6px 14px', background: '#a78bfa20', border: '1px solid #a78bfa50',
+              padding: '6px 12px', background: '#a78bfa20', border: '1px solid #a78bfa40',
               color: '#a78bfa', borderRadius: 6, cursor: fetching ? 'not-allowed' : 'pointer',
               fontSize: 12, opacity: fetching ? 0.5 : 1,
             }}
           >
-            {fetching ? 'Fetching...' : '↻ Fetch Now'}
+            {fetching ? '…' : '↻'}
           </button>
         </div>
       </div>
@@ -155,82 +180,96 @@ export default function App() {
       {/* Body */}
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 49px)', opacity: 0.4 }}>
-          Loading events...
-        </div>
-      ) : activeTab === 'world_cup' ? (
-        /* World Cup — card grid + detail panel */
-        <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
-          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
-            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
-              <EventSearch category="world_cup" onTracked={() => loadEvents('world_cup', true)} events={events} onSelect={e => setSelectedEvent(e)} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px' }}>
-              <span style={{ fontSize: 11, opacity: 0.3 }}>
-                {events.filter(e => !locationFilter['world_cup'] || e.city === locationFilter['world_cup']).length} games
-                {locationFilter['world_cup'] && ` in ${locationFilter['world_cup']}`}
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-                <LocationFilter events={events} value={locationFilter['world_cup']} onChange={c => setLocationFilter(prev => ({ ...prev, world_cup: c }))} />
-                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟</span>
-                <select value={quantity[activeTab]} onChange={e => handleQuantityChange(Number(e.target.value))} disabled={settingQty}
-                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}>
-                  {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-                {settingQty && <span style={{ fontSize: 11, opacity: 0.4 }}>Updating…</span>}
-              </div>
-            </div>
-            <WorldCupGrid
-              events={events.filter(e => !locationFilter['world_cup'] || e.city === locationFilter['world_cup'])}
-              selectedId={selectedEvent?.id ?? null}
-              onSelect={e => setSelectedEvent(e)}
-              onDelete={handleDelete}
-              quantity={quantity['world_cup']}
-            />
-          </div>
-          {selectedEvent && (
-            <div style={{ width: 380, borderLeft: '1px solid #333', padding: '20px 24px', overflowY: 'auto', background: '#13131f', flexShrink: 0 }}>
-              <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
-              <PriceChart snapshots={snapshots} slope={prediction?.slope} />
-            </div>
-          )}
+          Loading...
         </div>
       ) : (
-        /* Events tab — card grid + detail panel */
-        <div style={{ display: 'flex', height: 'calc(100vh - 49px)' }}>
-          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a' }}>
-            <div style={{ padding: '12px 20px 0', borderBottom: '1px solid #222', background: '#111', maxWidth: 480 }}>
-              <EventSearch category="events" onTracked={() => loadEvents('events', true)} events={events} onSelect={e => setSelectedEvent(e)} />
+        <div style={{ display: 'flex', height: isMobile ? undefined : 'calc(100vh - 49px)', minHeight: isMobile ? 'calc(100vh - 49px)' : undefined }}>
+
+          {/* Left: grid */}
+          <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a', minWidth: 0 }}>
+
+            {/* Search bar */}
+            <div style={{ borderBottom: '1px solid #1a1a1a', background: '#0d0d1a' }}>
+              <EventSearch
+                category={activeTab}
+                onTracked={() => loadEvents(activeTab, true)}
+                events={events}
+                onSelect={e => setSelectedEvent(e)}
+              />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px' }}>
-              <span style={{ fontSize: 11, opacity: 0.3 }}>
-                {events.filter(e => !locationFilter['events'] || e.city === locationFilter['events']).length} events
-                {locationFilter['events'] && ` in ${locationFilter['events']}`}
+
+            {/* Filter bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', flexWrap: 'nowrap', overflowX: 'auto' }}>
+              <span style={{ fontSize: 11, opacity: 0.3, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {filteredEvents.length} {activeTab === 'world_cup' ? 'games' : 'events'}
+                {loc && ` · ${loc}`}
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
-                <LocationFilter events={events} value={locationFilter['events']} onChange={c => setLocationFilter(prev => ({ ...prev, events: c }))} />
-                <span style={{ fontSize: 11, opacity: 0.5 }}>🎟</span>
-                <select value={quantity[activeTab]} onChange={e => handleQuantityChange(Number(e.target.value))} disabled={settingQty}
-                  style={{ background: '#1a1a2e', border: '1px solid #333', color: '#a78bfa', borderRadius: 5, padding: '3px 8px', fontSize: 12, cursor: 'pointer', opacity: settingQty ? 0.5 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+                <LocationFilter
+                  events={events}
+                  value={locationFilter[activeTab]}
+                  onChange={c => setLocationFilter(prev => ({ ...prev, [activeTab]: c }))}
+                />
+                <span style={{ fontSize: 11, opacity: 0.4 }}>🎟</span>
+                <select
+                  value={quantity[activeTab]}
+                  onChange={e => handleQuantityChange(Number(e.target.value))}
+                  style={SELECT_STYLE}
+                >
                   {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
-                {settingQty && <span style={{ fontSize: 11, opacity: 0.4 }}>Updating…</span>}
               </div>
             </div>
+
             <WorldCupGrid
-              events={events.filter(e => !locationFilter['events'] || e.city === locationFilter['events'])}
+              events={filteredEvents}
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
-              showTeams={false}
-              quantity={quantity['events']}
+              showTeams={activeTab === 'world_cup'}
+              quantity={quantity[activeTab]}
+              isMobile={isMobile}
             />
+
+            {/* Mobile padding so bottom sheet doesn't cover last card */}
+            {isMobile && selectedEvent && <div style={{ height: 320 }} />}
           </div>
-          {selectedEvent && (
-            <div style={{ width: 380, borderLeft: '1px solid #333', padding: '20px 24px', overflowY: 'auto', background: '#13131f', flexShrink: 0 }}>
-              <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
-              <PriceChart snapshots={snapshots} slope={prediction?.slope} />
+
+          {/* Desktop: sidebar detail panel */}
+          {!isMobile && selectedEvent && (
+            <div style={{ width: 360, borderLeft: '1px solid #1a1a1a', padding: '20px 22px', overflowY: 'auto', background: '#0f0f1c', flexShrink: 0 }}>
+              {detailPanel}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Mobile: bottom sheet detail panel */}
+      {isMobile && selectedEvent && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 300,
+          background: '#13131f', borderTop: '1px solid #2a2a3a',
+          borderRadius: '18px 18px 0 0',
+          padding: '0 20px 40px',
+          maxHeight: '72vh', overflowY: 'auto',
+          boxShadow: '0 -12px 48px #00000080',
+        }}>
+          {/* Drag handle */}
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#ffffff20' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#ffffff60', maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedEvent.name}
+            </span>
+            <button
+              onClick={() => setSelectedEvent(null)}
+              style={{ background: '#ffffff18', border: 'none', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              ✕
+            </button>
+          </div>
+          {detailPanel}
         </div>
       )}
     </div>
