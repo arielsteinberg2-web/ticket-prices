@@ -69,7 +69,7 @@ export default function App() {
     setFetching(true);
     try {
       await triggerFetch();
-      setLastFetch(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }));
+      setLastFetch(new Date().toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }));
       await loadEvents(activeTab);
     } finally {
       setFetching(false);

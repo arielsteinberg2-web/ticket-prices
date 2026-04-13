@@ -10,8 +10,7 @@ interface Props {
 }
 
 function formatTick(iso: string) {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: 'America/New_York',
+  return new Date(iso).toLocaleString(undefined, {
     month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
     hour12: false,
