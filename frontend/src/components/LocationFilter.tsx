@@ -7,18 +7,32 @@ interface Props {
   onChange: (city: string) => void;
 }
 
+const CITY_DISPLAY: Record<string, string> = {
+  'east rutherford': 'New York',
+  'foxborough': 'Boston',
+  'inglewood': 'Los Angeles',
+  'santa clara': 'San Francisco',
+  'arlington': 'Dallas',
+  'miami gardens': 'Miami',
+  'zapopan': 'Guadalajara',
+};
+
+function displayName(city: string): string {
+  return CITY_DISPLAY[city.toLowerCase()] ?? city;
+}
+
 export function LocationFilter({ events, value, onChange }: Props) {
-  const [input, setInput] = useState(value);
+  const [input, setInput] = useState(value ? displayName(value) : '');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Unique cities sorted alphabetically
+  // Unique raw cities, sorted by display name
   const cities = Array.from(
     new Set(events.map(e => e.city).filter(Boolean) as string[])
-  ).sort();
+  ).sort((a, b) => displayName(a).localeCompare(displayName(b)));
 
   const suggestions = input.trim().length >= 1
-    ? cities.filter(c => c.toLowerCase().includes(input.trim().toLowerCase()))
+    ? cities.filter(c => displayName(c).toLowerCase().includes(input.trim().toLowerCase()))
     : cities;
 
   // Close dropdown on outside click
@@ -30,11 +44,11 @@ export function LocationFilter({ events, value, onChange }: Props) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Keep input in sync if value is cleared externally
-  useEffect(() => { setInput(value); }, [value]);
+  // Sync input when value is cleared/changed externally
+  useEffect(() => { setInput(value ? displayName(value) : ''); }, [value]);
 
   const select = (city: string) => {
-    setInput(city);
+    setInput(displayName(city));
     onChange(city);
     setOpen(false);
   };
@@ -84,7 +98,7 @@ export function LocationFilter({ events, value, onChange }: Props) {
               onMouseEnter={e => (e.currentTarget.style.background = '#2a2a3e')}
               onMouseLeave={e => (e.currentTarget.style.background = city === value ? '#2a2a4e' : 'transparent')}
             >
-              {city}
+              {displayName(city)}
             </div>
           ))}
         </div>
