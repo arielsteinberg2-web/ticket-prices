@@ -75,7 +75,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
           }}
         />
         <button
-          onClick={handleSearch}
+          onClick={() => { if (debounceRef.current) clearTimeout(debounceRef.current); handleSearch(); }}
           disabled={loading}
           style={{
             padding: '7px 12px', background: '#a78bfa15', border: '1px solid #a78bfa40',
