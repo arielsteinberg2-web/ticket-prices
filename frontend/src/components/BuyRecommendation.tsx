@@ -81,7 +81,7 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {[
           { label: 'Current Low', value: latest != null ? `$${latest.toFixed(0)}` : '—', color: '#34d399' },
           { label: 'All-Time Low', value: allTimeLow != null ? `$${allTimeLow.toFixed(0)}` : '—' },
@@ -94,8 +94,8 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
           { label: 'Days Tracked', value: String(uniqueDays) },
         ].map(stat => (
           <div key={stat.label} style={{
-            flex: 1, background: '#0e0e1a', borderRadius: 8,
-            padding: 10, textAlign: 'center',
+            flex: '1 1 120px', background: '#0e0e1a', borderRadius: 8,
+            padding: 10, textAlign: 'center', minWidth: 0,
           }}>
             <div style={{ fontSize: 10, opacity: 0.4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               {stat.label}
