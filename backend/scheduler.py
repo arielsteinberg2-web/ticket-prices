@@ -129,7 +129,7 @@ def run_fetch_job(db: Session = None, force: bool = False):
 
         # TickPick: check token expiry, then fetch prices
         from backend.config import TICKPICK_TOKEN
-        from backend.tickpick_fetcher import fetch_tickpick_price, find_tickpick_id, _get_sitemap_events, check_token_expiry
+        from backend.tickpick_fetcher import fetch_tickpick_prices_all_qty, find_tickpick_id, _get_sitemap_events, check_token_expiry
         if TICKPICK_TOKEN:
             check_token_expiry(TICKPICK_TOKEN)
         if TICKPICK_TOKEN:
@@ -145,20 +145,21 @@ def run_fetch_job(db: Session = None, force: bool = False):
                     event.tickpick_id = tp_id
                     logger.info("Auto-assigned TickPick ID %s to '%s'", tp_id, event.name)
 
-        # TickPick price refresh for events with a tickpick_id
+        # TickPick price refresh — one API call per event, stores prices for qty 1-6
         if TICKPICK_TOKEN:
             tp_events = db.query(Event).filter(Event.tickpick_id.isnot(None)).all()
             for event in tp_events:
-                qty = event.quantity or 1
-                price = fetch_tickpick_price(event.tickpick_id, TICKPICK_TOKEN, quantity=qty)
-                if price is not None:
+                prices_by_qty = fetch_tickpick_prices_all_qty(event.tickpick_id, TICKPICK_TOKEN)
+                for qty, price in prices_by_qty.items():
                     db.add(PriceSnapshot(
                         event_id=event.id,
                         fetched_at=now,
                         lowest_price=price,
                         source="tickpick",
+                        quantity=qty,
                     ))
-                    logger.info("TickPick price for %s (qty %d): $%.0f", event.name, qty, price)
+                if prices_by_qty:
+                    logger.info("TickPick prices for '%s': %s", event.name, prices_by_qty)
 
         db.commit()
         logger.info("Fetch job complete at %s", now.isoformat())

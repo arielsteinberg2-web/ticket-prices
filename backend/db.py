@@ -32,6 +32,7 @@ class PriceSnapshot(Base):
     fetched_at = Column(DateTime, default=func.now())
     lowest_price = Column(Float, nullable=False)
     source = Column(String, nullable=True, default="ticketmaster")
+    quantity = Column(Integer, nullable=True, default=1)
     event = relationship("Event", back_populates="snapshots")
 
 
@@ -78,10 +79,18 @@ def init_db(engine=None):
     except Exception:
         pass  # Column already exists
 
-    # Add quantity column if it doesn't exist
+    # Add quantity column to events if it doesn't exist
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE events ADD COLUMN quantity INTEGER DEFAULT 1"))
+            conn.commit()
+    except Exception:
+        pass  # Column already exists
+
+    # Add quantity column to price_snapshots if it doesn't exist
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE price_snapshots ADD COLUMN quantity INTEGER DEFAULT 1"))
             conn.commit()
     except Exception:
         pass  # Column already exists

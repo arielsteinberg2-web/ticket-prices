@@ -42,9 +42,14 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
 
     result = []
     for event in events:
-        snapshots = sorted(event.snapshots, key=lambda s: s.fetched_at)
-        latest_price = snapshots[-1].lowest_price if snapshots else None
-        week_ago_snap = snapshots[-8] if len(snapshots) >= 8 else (snapshots[0] if snapshots else None)
+        qty = event.quantity or 1
+        all_snaps = sorted(event.snapshots, key=lambda s: s.fetched_at)
+        # Use quantity-matched snapshots for display; fall back to qty=1 for old rows
+        qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty]
+        if not qty_snaps:
+            qty_snaps = all_snaps  # fallback for legacy data
+        latest_price = qty_snaps[-1].lowest_price if qty_snaps else None
+        week_ago_snap = qty_snaps[-8] if len(qty_snaps) >= 8 else (qty_snaps[0] if qty_snaps else None)
         weekly_change = None
         if latest_price and week_ago_snap and week_ago_snap.lowest_price:
             weekly_change = round(
@@ -57,12 +62,12 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             "event_date": event.event_date.isoformat() if event.event_date else None,
             "venue": event.venue,
             "city": event.city,
-            "quantity": event.quantity or 1,
+            "quantity": qty,
             "latest_price": latest_price,
             "weekly_change_pct": weekly_change,
-            "snapshot_count": len(snapshots),
-            "price_source": snapshots[-1].source if snapshots else None,
-            "price_history": [s.lowest_price for s in snapshots[-20:]],
+            "snapshot_count": len(qty_snaps),
+            "price_source": qty_snaps[-1].source if qty_snaps else None,
+            "price_history": [s.lowest_price for s in qty_snaps[-20:]],
         })
     return result
 
@@ -83,7 +88,11 @@ def get_history(event_id: int, db: Session = Depends(get_session)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    snapshots = sorted(list(event.snapshots), key=lambda s: s.fetched_at)
+    qty = event.quantity or 1
+    all_snaps = sorted(list(event.snapshots), key=lambda s: s.fetched_at)
+    snapshots = [s for s in all_snaps if (s.quantity or 1) == qty]
+    if not snapshots:
+        snapshots = all_snaps  # fallback for legacy data
     return [
         {"fetched_at": s.fetched_at.isoformat(), "lowest_price": s.lowest_price}
         for s in snapshots
@@ -149,26 +158,13 @@ class QuantityRequest(BaseModel):
 
 @router.post("/quantity")
 def set_category_quantity(body: QuantityRequest, db: Session = Depends(get_session)):
-    """Set ticket quantity for all events in a category and re-fetch TickPick prices."""
+    """Set ticket quantity for all events in a category. Prices for all quantities are pre-fetched."""
     if not (1 <= body.quantity <= 6):
         raise HTTPException(status_code=400, detail="Quantity must be 1-6")
     events = db.query(Event).filter(Event.category == body.category).all()
     for event in events:
         event.quantity = body.quantity
     db.commit()
-
-    # Re-fetch TickPick prices immediately with new quantity
-    from backend.config import TICKPICK_TOKEN
-    from backend.tickpick_fetcher import fetch_tickpick_price
-    if TICKPICK_TOKEN:
-        now = __import__('datetime').datetime.utcnow()
-        for event in events:
-            if event.tickpick_id:
-                price = fetch_tickpick_price(event.tickpick_id, TICKPICK_TOKEN, quantity=body.quantity)
-                if price is not None:
-                    db.add(PriceSnapshot(event_id=event.id, fetched_at=now, lowest_price=price, source="tickpick"))
-        db.commit()
-
     return {"status": "ok", "updated": len(events)}
 
 
@@ -226,11 +222,11 @@ class TrackRequest(BaseModel):
 
 
 def _discover_tickpick_in_background(event_id: int, event_name: str, event_date: datetime.datetime):
-    """Run in background after track: find TickPick ID and fetch price."""
+    """Run in background after track: find TickPick ID and fetch prices for all quantities."""
     import logging
     from backend.db import _SessionFactory
     from backend.config import TICKPICK_TOKEN
-    from backend.tickpick_fetcher import find_tickpick_id, fetch_tickpick_price
+    from backend.tickpick_fetcher import find_tickpick_id, fetch_tickpick_prices_all_qty
     logger = logging.getLogger(__name__)
     if not _SessionFactory or not TICKPICK_TOKEN:
         return
@@ -243,16 +239,18 @@ def _discover_tickpick_in_background(event_id: int, event_name: str, event_date:
         if not event:
             return
         event.tickpick_id = tp_id
-        price = fetch_tickpick_price(tp_id, TICKPICK_TOKEN)
-        if price is not None:
+        now = datetime.datetime.utcnow()
+        prices_by_qty = fetch_tickpick_prices_all_qty(tp_id, TICKPICK_TOKEN)
+        for qty, price in prices_by_qty.items():
             db.add(PriceSnapshot(
                 event_id=event_id,
-                fetched_at=datetime.datetime.utcnow(),
+                fetched_at=now,
                 lowest_price=price,
                 source="tickpick",
+                quantity=qty,
             ))
         db.commit()
-        logger.info("Background: TickPick ID %s, price %s for '%s'", tp_id, price, event_name)
+        logger.info("Background: TickPick ID %s, prices %s for '%s'", tp_id, prices_by_qty, event_name)
     except Exception as e:
         logger.error("Background TickPick discovery failed for event %s: %s", event_id, e)
         db.rollback()

@@ -82,6 +82,12 @@ def extract_tickpick_id(url: str) -> Optional[str]:
 
 def fetch_tickpick_price(tickpick_id: str, token: str, quantity: int = 1) -> Optional[float]:
     """Return the lowest listing price for a TickPick event for the given quantity, or None."""
+    result = fetch_tickpick_prices_all_qty(tickpick_id, token)
+    return result.get(quantity)
+
+
+def fetch_tickpick_prices_all_qty(tickpick_id: str, token: str) -> dict:
+    """Return lowest prices for quantities 1-6 in a single API call. Returns {qty: price}."""
     try:
         resp = requests.get(
             f"{BASE_URL}/{tickpick_id}",
@@ -90,21 +96,24 @@ def fetch_tickpick_price(tickpick_id: str, token: str, quantity: int = 1) -> Opt
         )
         if resp.status_code != 200:
             logger.warning("TickPick listings returned %d for event %s", resp.status_code, tickpick_id)
-            return None
+            return {}
         listings = resp.json().get("listings", [])
-        # Exclude parking; filter by quantity available
+        # Exclude parking
         ticket_listings = [
             l for l in listings
             if l.get("p") is not None
             and "pk" not in (l.get("d") or [])
             and "PARKING" not in (l.get("r") or "").upper()
-            and l.get("q", 1) >= quantity
         ]
-        prices = [l["p"] for l in ticket_listings]
-        return min(prices) if prices else None
+        result = {}
+        for qty in range(1, 7):
+            prices = [l["p"] for l in ticket_listings if l.get("q", 1) >= qty]
+            if prices:
+                result[qty] = min(prices)
+        return result
     except Exception as e:
         logger.error("TickPick fetch failed for event %s: %s", tickpick_id, e)
-        return None
+        return {}
 
 
 # ---------------------------------------------------------------------------

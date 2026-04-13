@@ -72,6 +72,15 @@ export default function App() {
       await setQuantity(activeTab, q);
       setQuantityState(prev => ({ ...prev, [activeTab]: q }));
       await loadEvents(activeTab, true);
+      // Reload chart + prediction for selected event (now filtered by new quantity)
+      if (selectedEvent) {
+        const [hist, pred] = await Promise.all([
+          fetchHistory(selectedEvent.id),
+          fetchPrediction(selectedEvent.id),
+        ]);
+        setSnapshots(hist);
+        setPrediction(pred);
+      }
     } finally {
       setSettingQty(false);
     }
