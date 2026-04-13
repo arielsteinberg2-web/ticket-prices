@@ -1,7 +1,7 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import not_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, subqueryload
 from pydantic import BaseModel
 from typing import Optional
 from backend.db import Event, PriceSnapshot, get_session
@@ -13,10 +13,11 @@ router = APIRouter(prefix="/api")
 
 @router.get("/events")
 def list_events(category: str = None, db: Session = Depends(get_session)):
-    query = db.query(Event)
+    # Load events + all snapshots in 2 queries instead of N+1
+    query = db.query(Event).options(subqueryload(Event.snapshots))
     if category:
         query = query.filter(Event.category == category)
-    # FIFA World Cup 2026 host cities (USA, Canada, Mexico)
+
     WC_HOST_CITIES = {
         'new york', 'new jersey', 'east rutherford', 'los angeles', 'inglewood',
         'dallas', 'arlington', 'san francisco', 'santa clara', 'seattle',
@@ -32,7 +33,6 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             not_(Event.name.ilike('%Pacific%')),
         )
         events = query.all()
-        # Keep only events in host cities (or where city is unknown)
         events = [
             e for e in events
             if e.city is None or any(h in e.city.lower() for h in WC_HOST_CITIES)
@@ -42,7 +42,7 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
 
     result = []
     for event in events:
-        snapshots = sorted(list(event.snapshots), key=lambda s: s.fetched_at)
+        snapshots = sorted(event.snapshots, key=lambda s: s.fetched_at)
         latest_price = snapshots[-1].lowest_price if snapshots else None
         week_ago_snap = snapshots[-8] if len(snapshots) >= 8 else (snapshots[0] if snapshots else None)
         weekly_change = None
