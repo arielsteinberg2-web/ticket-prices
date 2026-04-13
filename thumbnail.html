@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1080px;
+    background: #0d0d1a;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Ambient glow */
+  .glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #a78bfa18 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .card {
+    position: relative;
+    background: #111122;
+    border: 1px solid #2a2a4a;
+    border-radius: 28px;
+    padding: 56px 64px 52px;
+    width: 900px;
+    box-shadow: 0 0 80px #a78bfa18, 0 32px 80px #00000060;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #a78bfa15; border: 1px solid #a78bfa40;
+    border-radius: 999px; padding: 6px 18px;
+    font-size: 13px; color: #a78bfa; letter-spacing: 0.05em;
+    text-transform: uppercase; font-weight: 600;
+    margin-bottom: 28px;
+  }
+
+  .title {
+    font-size: 64px; font-weight: 800;
+    color: #fff; line-height: 1.1;
+    margin-bottom: 12px;
+    letter-spacing: -1px;
+  }
+  .title span { color: #a78bfa; }
+
+  .subtitle {
+    font-size: 22px; color: #ffffff60;
+    line-height: 1.5; margin-bottom: 48px;
+    max-width: 580px;
+  }
+
+  .features {
+    display: flex; gap: 16px; margin-bottom: 52px;
+    flex-wrap: wrap;
+  }
+  .feat {
+    background: #1a1a2e; border: 1px solid #2a2a3e;
+    border-radius: 12px; padding: 14px 20px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 15px; color: #ffffffb0; font-weight: 500;
+  }
+  .feat-icon { font-size: 20px; }
+
+  .events-preview {
+    display: flex; gap: 12px;
+  }
+  .event-card {
+    flex: 1; background: #1a1a2e; border: 1px solid #2a2a3e;
+    border-radius: 14px; padding: 16px 18px;
+  }
+  .event-card.selected { border-color: #a78bfa; background: #2a2a3e; }
+
+  .ec-teams { font-size: 13px; color: #fff; font-weight: 700; margin-bottom: 4px; }
+  .ec-date  { font-size: 11px; color: #ffffff40; margin-bottom: 10px; }
+  .ec-price { font-size: 22px; font-weight: 800; color: #34d399; }
+  .ec-change {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    background: #1a3a2a; color: #34d399;
+    border-radius: 4px; padding: 2px 7px; margin-left: 6px;
+  }
+  .ec-change.up { background: #3a2a1a; color: #f59e0b; }
+  .ec-source { font-size: 10px; color: #ffffff30; margin-top: 4px; }
+
+  .rec {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid #ffffff10;
+  }
+  .rec-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #34d399; flex-shrink: 0;
+  }
+  .rec-dot.wait { background: #f59e0b; }
+  .rec-text { font-size: 11px; color: #ffffff60; }
+  .rec-label { font-weight: 700; color: #34d399; }
+  .rec-label.wait { color: #f59e0b; }
+
+  /* Sparkline SVG placeholders */
+  .spark { margin-top: 8px; }
+
+  .footer {
+    margin-top: 36px; padding-top: 28px;
+    border-top: 1px solid #ffffff08;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .footer-left { font-size: 13px; color: #ffffff25; }
+  .footer-right {
+    font-size: 13px; color: #a78bfa80; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #34d399; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="card">
+  <div class="badge">⚡ Live Price Tracker</div>
+
+  <div class="title">🎟 Ticket Prices<br><span>At a Glance</span></div>
+  <div class="subtitle">Track World Cup 2026 & events — see price trends, get buy/wait recommendations, and never overpay.</div>
+
+  <div class="features">
+    <div class="feat"><span class="feat-icon">⚽</span> World Cup 2026</div>
+    <div class="feat"><span class="feat-icon">🎭</span> Concerts & Events</div>
+    <div class="feat"><span class="feat-icon">📈</span> Price History</div>
+    <div class="feat"><span class="feat-icon">🤖</span> Buy Recommendation</div>
+    <div class="feat"><span class="feat-icon">🎟</span> 1–6 Tickets</div>
+    <div class="feat"><span class="feat-icon">📍</span> Filter by City</div>
+  </div>
+
+  <div class="events-preview">
+    <div class="event-card selected">
+      <div class="ec-teams">🇺🇸 USA vs 🇧🇷 Brazil</div>
+      <div class="ec-date">Jul 14, 2026 · MetLife Stadium, NJ</div>
+      <div class="ec-price">$318 <span class="ec-change up">▲ 12%</span></div>
+      <div class="ec-source">via TickPick</div>
+      <div class="rec">
+        <div class="rec-dot wait"></div>
+        <div class="rec-text"><span class="rec-label wait">BUY SOON</span> — trending up, book before it spikes</div>
+      </div>
+    </div>
+
+    <div class="event-card">
+      <div class="ec-teams">🇫🇷 France vs 🇩🇪 Germany</div>
+      <div class="ec-date">Jun 28, 2026 · SoFi Stadium, LA</div>
+      <div class="ec-price">$224 <span class="ec-change">▼ 5%</span></div>
+      <div class="ec-source">via TickPick</div>
+      <div class="rec">
+        <div class="rec-dot"></div>
+        <div class="rec-text"><span class="rec-label">WAIT</span> — prices still falling</div>
+      </div>
+    </div>
+
+    <div class="event-card">
+      <div class="ec-teams">Shakira</div>
+      <div class="ec-date">Aug 2, 2026 · Madison Square Garden</div>
+      <div class="ec-price">$187 <span class="ec-change">▼ 3%</span></div>
+      <div class="ec-source">via TickPick</div>
+      <div class="rec">
+        <div class="rec-dot"></div>
+        <div class="rec-text"><span class="rec-label">WAIT</span> — slight dip, monitor weekly</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">Prices updated every 4 hours · TickPick + SeatGeek</div>
+    <div class="footer-right"><div class="dot"></div> Live</div>
+  </div>
+</div>
+</body>
+</html>

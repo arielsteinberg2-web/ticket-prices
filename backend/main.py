@@ -1,9 +1,9 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from backend.db import init_db
 from backend.routers.events import router
 
@@ -41,6 +41,18 @@ def health():
 if os.path.isdir(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
 
+    @app.get("/og-image.png")
+    def serve_og_image():
+        return FileResponse(os.path.join(FRONTEND_DIST, "og-image.png"), media_type="image/png")
+
+    _index_html: str | None = None
+
     @app.get("/{full_path:path}")
-    def serve_frontend(full_path: str):
-        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+    def serve_frontend(request: Request, full_path: str):
+        nonlocal _index_html
+        if _index_html is None:
+            with open(os.path.join(FRONTEND_DIST, "index.html"), encoding="utf-8") as f:
+                _index_html = f.read()
+        base = f"{request.url.scheme}://{request.headers.get('host', request.url.netloc)}"
+        html = _index_html.replace("__OG_BASE__", base)
+        return HTMLResponse(html)
