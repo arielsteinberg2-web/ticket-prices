@@ -145,7 +145,7 @@ def get_status():
 def trigger_fetch(db: Session = Depends(get_session)):
     """Manually trigger a price fetch for all watchlist targets."""
     from backend.scheduler import run_fetch_job
-    run_fetch_job(db)
+    run_fetch_job(db, force=True)
     return {"status": "ok", "message": "Fetch triggered"}
 
 

@@ -9,7 +9,16 @@ from backend.db import Event, PriceSnapshot
 logger = logging.getLogger(__name__)
 
 
-def run_fetch_job(db: Session = None):
+def _already_fetched_recently(db: Session, hours: int = 2) -> bool:
+    """Return True if a snapshot was already saved within the last `hours` hours."""
+    from backend.db import PriceSnapshot
+    from sqlalchemy import func
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=hours)
+    count = db.query(func.count(PriceSnapshot.id)).filter(PriceSnapshot.fetched_at >= cutoff).scalar()
+    return count > 0
+
+
+def run_fetch_job(db: Session = None, force: bool = False):
     """
     Fetch latest lowest prices for all watchlist targets and upsert into DB.
     If db is None, creates its own session from the global _SessionFactory.
@@ -23,6 +32,10 @@ def run_fetch_job(db: Session = None):
         db = _SessionFactory()
 
     try:
+        if not force and _already_fetched_recently(db, hours=2):
+            logger.info("Skipping fetch — already ran within the last 2 hours.")
+            return
+
         watchlist = load_watchlist()
         targets = get_search_targets(watchlist)
         now = datetime.datetime.utcnow()
