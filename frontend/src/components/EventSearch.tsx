@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Event, SearchResult } from '../types';
 import { searchEvents, trackEvent } from '../api';
 
@@ -16,17 +16,18 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
   const [tracked, setTracked] = useState<Set<string>>(new Set());
   const [tickpickUrls, setTickpickUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const localMatches = query.trim().length >= 2
     ? events.filter(e => e.name.toLowerCase().includes(query.trim().toLowerCase()))
     : [];
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const handleSearch = async (q = query) => {
+    if (!q.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const data = await searchEvents(query.trim(), category);
+      const data = await searchEvents(q.trim(), category);
       setResults(data);
       if (data.length === 0) setError('No events found. Try a different search.');
     } catch {
@@ -35,6 +36,14 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
       setLoading(false);
     }
   };
+
+  // Auto-search after user stops typing for 500ms
+  useEffect(() => {
+    if (query.trim().length < 2) { setResults([]); setError(null); return; }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => handleSearch(query), 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query]);
 
   const handleTrack = async (result: SearchResult) => {
     const tickpick_url = tickpickUrls[result.ticketmaster_id] || undefined;
@@ -56,8 +65,8 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
       <div style={{ display: 'flex', gap: 6, marginBottom: showLocalSuggestions || results.length > 0 || error ? 8 : 0 }}>
         <input
           value={query}
-          onChange={e => { setQuery(e.target.value); setResults([]); setError(null); }}
-          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { if (debounceRef.current) clearTimeout(debounceRef.current); handleSearch(); } }}
           placeholder={`Search ${category === 'world_cup' ? 'World Cup' : ''} events...`}
           style={{
             flex: 1, padding: '7px 10px', background: '#1a1a2e',
