@@ -8,9 +8,10 @@ interface Props {
   events?: Event[];
   onSelect?: (event: Event) => void;
   onBrowseResults?: (results: SearchResult[], query: string) => void;
+  onBrowseLoading?: (loading: boolean) => void;
 }
 
-export function EventSearch({ category, onTracked, events = [], onSelect, onBrowseResults }: Props) {
+export function EventSearch({ category, onTracked, events = [], onSelect, onBrowseResults, onBrowseLoading }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect, onBrow
   const handleSearch = async (q = query) => {
     if (!q.trim()) return;
     setLoading(true);
+    onBrowseLoading?.(true);
     setError(null);
     try {
       const data = await searchEvents(q.trim(), category);
@@ -60,6 +62,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect, onBrow
       setError('Search failed. Check your connection.');
     } finally {
       setLoading(false);
+      onBrowseLoading?.(false);
     }
   };
 

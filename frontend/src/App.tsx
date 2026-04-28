@@ -35,6 +35,7 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [browseResults, setBrowseResults] = useState<SearchResult[]>([]);
   const [browseQuery, setBrowseQuery] = useState('');
+  const [browseLoading, setBrowseLoading] = useState(false);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -68,6 +69,7 @@ export default function App() {
     setLocationFilter(prev => ({ ...prev, [activeTab]: '' }));
     setBrowseResults([]);
     setBrowseQuery('');
+    setBrowseLoading(false);
   }, [activeTab, loadEvents]);
 
   useEffect(() => {
@@ -199,14 +201,15 @@ export default function App() {
         <div style={{ display: 'flex', height: isMobile ? undefined : 'calc(100vh - 49px)', minHeight: isMobile ? 'calc(100vh - 49px)' : undefined }}>
 
           {/* Browse panel — events tab only, desktop left / mobile top */}
-          {activeTab === 'events' && browseResults.length > 0 && !isMobile && (
+          {activeTab === 'events' && (browseResults.length > 0 || browseLoading) && !isMobile && (
             <BrowsePanel
               query={browseQuery}
               results={browseResults}
               trackedEvents={events}
               onTracked={() => loadEvents(activeTab, true)}
-              onClose={() => { setBrowseResults([]); setBrowseQuery(''); }}
+              onClose={() => { setBrowseResults([]); setBrowseQuery(''); setBrowseLoading(false); }}
               isMobile={false}
+              loading={browseLoading}
             />
           )}
 
@@ -221,18 +224,20 @@ export default function App() {
                 events={filteredEvents}
                 onSelect={e => setSelectedEvent(e)}
                 onBrowseResults={activeTab === 'events' ? (r, q) => { if (r.length === 0 && !q) { setBrowseResults([]); setBrowseQuery(''); } else { setBrowseResults(r); if (q) setBrowseQuery(q); } } : undefined}
+                onBrowseLoading={activeTab === 'events' ? setBrowseLoading : undefined}
               />
             </div>
 
             {/* Mobile browse panel — below search bar */}
-            {activeTab === 'events' && browseResults.length > 0 && isMobile && (
+            {activeTab === 'events' && (browseResults.length > 0 || browseLoading) && isMobile && (
               <BrowsePanel
                 query={browseQuery}
                 results={browseResults}
                 trackedEvents={events}
                 onTracked={() => loadEvents(activeTab, true)}
-                onClose={() => { setBrowseResults([]); setBrowseQuery(''); }}
+                onClose={() => { setBrowseResults([]); setBrowseQuery(''); setBrowseLoading(false); }}
                 isMobile={true}
+                loading={browseLoading}
               />
             )}
 

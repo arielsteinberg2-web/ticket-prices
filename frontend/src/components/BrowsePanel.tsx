@@ -9,6 +9,7 @@ interface Props {
   onTracked: () => void;
   onClose: () => void;
   isMobile: boolean;
+  loading?: boolean;
 }
 
 function fmtDate(iso: string | null): { top: string; bot: string } {
@@ -21,7 +22,7 @@ function fmtDate(iso: string | null): { top: string; bot: string } {
   return { top: `${mon} ${day}`, bot: `${dow} ${time}` };
 }
 
-export function BrowsePanel({ query, results, trackedEvents, onTracked, onClose, isMobile }: Props) {
+export function BrowsePanel({ query, results, trackedEvents, onTracked, onClose, isMobile, loading }: Props) {
   const [localTracked, setLocalTracked] = useState<Set<string>>(new Set());
   const [localUntracked, setLocalUntracked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<Set<string>>(new Set());
@@ -87,8 +88,12 @@ export function BrowsePanel({ query, results, trackedEvents, onTracked, onClose,
         background: '#111118', flexShrink: 0,
       }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa' }}>
-            {results.length} result{results.length !== 1 ? 's' : ''}
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {loading ? (
+              <span style={{ opacity: 0.6 }}>Searching…</span>
+            ) : (
+              <>{results.length} result{results.length !== 1 ? 's' : ''}</>
+            )}
           </div>
           <div style={{ fontSize: 11, opacity: 0.4, marginTop: 1, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {query}
