@@ -7,9 +7,10 @@ interface Props {
   onTracked: () => void;
   events?: Event[];
   onSelect?: (event: Event) => void;
+  onBrowseResults?: (results: SearchResult[], query: string) => void;
 }
 
-export function EventSearch({ category, onTracked, events = [], onSelect }: Props) {
+export function EventSearch({ category, onTracked, events = [], onSelect, onBrowseResults }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,8 +29,14 @@ export function EventSearch({ category, onTracked, events = [], onSelect }: Prop
     setError(null);
     try {
       const data = await searchEvents(q.trim(), category);
-      setResults(data);
-      if (data.length === 0) setError('No events found. Try a different search.');
+      if (onBrowseResults) {
+        onBrowseResults(data, q.trim());
+        setResults([]);
+        if (data.length === 0) setError('No events found. Try a different search.');
+      } else {
+        setResults(data);
+        if (data.length === 0) setError('No events found. Try a different search.');
+      }
     } catch {
       setError('Search failed. Check your connection.');
     } finally {

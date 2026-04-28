@@ -38,6 +38,7 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             if e.city is None or any(h in e.city.lower() for h in WC_HOST_CITIES)
         ]
     else:
+        query = query.filter(not_(Event.name.ilike('%World Cup%')))
         events = query.all()
 
     result = []

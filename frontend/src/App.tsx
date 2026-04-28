@@ -6,6 +6,8 @@ import { PriceChart } from './components/PriceChart';
 import { BuyRecommendation } from './components/BuyRecommendation';
 import { EventSearch } from './components/EventSearch';
 import { LocationFilter } from './components/LocationFilter';
+import { BrowsePanel } from './components/BrowsePanel';
+import type { SearchResult } from './types';
 
 const TABS: { key: Category; label: string; emoji: string }[] = [
   { key: 'world_cup', label: 'World Cup 2026', emoji: '⚽' },
@@ -31,6 +33,8 @@ export default function App() {
   const [lastFetch, setLastFetch] = useState<string | null>(null);
   const [tokenDays, setTokenDays] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [browseResults, setBrowseResults] = useState<SearchResult[]>([]);
+  const [browseQuery, setBrowseQuery] = useState('');
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -62,6 +66,8 @@ export default function App() {
     setPrediction(null);
     loadEvents(activeTab);
     setLocationFilter(prev => ({ ...prev, [activeTab]: '' }));
+    setBrowseResults([]);
+    setBrowseQuery('');
   }, [activeTab, loadEvents]);
 
   useEffect(() => {
@@ -185,6 +191,18 @@ export default function App() {
       ) : (
         <div style={{ display: 'flex', height: isMobile ? undefined : 'calc(100vh - 49px)', minHeight: isMobile ? 'calc(100vh - 49px)' : undefined }}>
 
+          {/* Browse panel — events tab only, desktop left / mobile top */}
+          {activeTab === 'events' && browseResults.length > 0 && !isMobile && (
+            <BrowsePanel
+              query={browseQuery}
+              results={browseResults}
+              trackedEvents={events}
+              onTracked={() => loadEvents(activeTab, true)}
+              onClose={() => { setBrowseResults([]); setBrowseQuery(''); }}
+              isMobile={false}
+            />
+          )}
+
           {/* Left: grid */}
           <div style={{ flex: 1, overflowY: 'auto', background: '#0d0d1a', minWidth: 0 }}>
 
@@ -195,8 +213,21 @@ export default function App() {
                 onTracked={() => loadEvents(activeTab, true)}
                 events={events}
                 onSelect={e => setSelectedEvent(e)}
+                onBrowseResults={activeTab === 'events' ? (r, q) => { setBrowseResults(r); setBrowseQuery(q); } : undefined}
               />
             </div>
+
+            {/* Mobile browse panel — below search bar */}
+            {activeTab === 'events' && browseResults.length > 0 && isMobile && (
+              <BrowsePanel
+                query={browseQuery}
+                results={browseResults}
+                trackedEvents={events}
+                onTracked={() => loadEvents(activeTab, true)}
+                onClose={() => { setBrowseResults([]); setBrowseQuery(''); }}
+                isMobile={true}
+              />
+            )}
 
             {/* Filter bar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', flexWrap: 'nowrap', overflowX: 'auto' }}>
