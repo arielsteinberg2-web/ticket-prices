@@ -123,7 +123,14 @@ export default function App() {
   };
 
   const loc = locationFilter[activeTab];
-  const filteredEvents = events.filter(e => !loc || e.city === loc);
+  const filteredEvents = events.filter(e => {
+    if (loc && e.city !== loc) return false;
+    if (activeTab === 'events') {
+      const n = e.name.toLowerCase();
+      if (n.includes('world cup') || n.includes('fifa')) return false;
+    }
+    return true;
+  });
 
   const detailPanel = selectedEvent && (
     <>
