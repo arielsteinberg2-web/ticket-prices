@@ -95,8 +95,17 @@ def init_db(engine=None):
     except Exception:
         pass  # Column already exists
 
-    # Add price_alerts table if it doesn't exist (handled by create_all above for new DBs)
-    # For existing DBs, create_all is idempotent — it only creates missing tables
+    # Fix any world cup / FIFA events that were incorrectly saved as category='events'
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "UPDATE events SET category = 'world_cup' "
+                "WHERE (LOWER(name) LIKE '%world cup%' OR LOWER(name) LIKE '%fifa%') "
+                "AND category != 'world_cup'"
+            ))
+            conn.commit()
+    except Exception:
+        pass
 
     _SessionFactory = sessionmaker(bind=engine)
     return engine
