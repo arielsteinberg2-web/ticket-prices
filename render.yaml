@@ -16,3 +16,11 @@ services:
         value: arielsteinberg2@gmail.com
       - key: GMAIL_APP_PASSWORD
         sync: false
+
+  - type: cron
+    name: keep-alive-ping
+    runtime: python
+    plan: free
+    schedule: "*/14 * * * *"
+    buildCommand: ""
+    startCommand: python -c "import urllib.request; urllib.request.urlopen('https://ticket-prices-tracker.onrender.com/health', timeout=30)"
