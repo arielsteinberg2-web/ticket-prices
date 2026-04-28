@@ -187,7 +187,7 @@ def trigger_fetch(db: Session = Depends(get_session)):
 
 @router.get("/search")
 def search_events(q: str, category: str = "sports", db: Session = Depends(get_session)):
-    """Search Ticketmaster live for events matching q. Returns top 20 results."""
+    """Search Ticketmaster live for events matching q. Returns up to 100 results sorted by date."""
     from backend.fetcher import fetch_events, build_event_record
     from backend.config import TICKETMASTER_API_KEY
 
@@ -199,13 +199,32 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
         classification = "Sports"
     try:
         raw_events = fetch_events(q, classification, TICKETMASTER_API_KEY)
-    except Exception as e:
+    except Exception:
         return []
 
+    # Pre-load all tracked events with their snapshots in one query
+    tracked_by_tmid: dict[str, Event] = {
+        e.ticketmaster_id: e
+        for e in db.query(Event).options(subqueryload(Event.snapshots)).filter(
+            Event.ticketmaster_id.isnot(None)
+        ).all()
+        if e.ticketmaster_id
+    }
+
     results = []
-    for raw in raw_events[:20]:
+    for raw in raw_events[:100]:
         record = build_event_record(raw, category)
-        existing = db.query(Event).filter_by(ticketmaster_id=record["ticketmaster_id"]).first()
+        existing = tracked_by_tmid.get(record["ticketmaster_id"])
+
+        # For already-tracked events use the stored TickPick/DB price
+        price = record["lowest_price"]
+        if existing:
+            all_snaps = sorted(existing.snapshots, key=lambda s: s.fetched_at)
+            qty = existing.quantity or 1
+            qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
+            if qty_snaps:
+                price = qty_snaps[-1].lowest_price
+
         results.append({
             "ticketmaster_id": record["ticketmaster_id"],
             "name": record["name"],
@@ -213,9 +232,12 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
             "event_date": record["event_date"].isoformat() if record["event_date"] else None,
             "venue": record["venue"],
             "city": record["city"],
-            "lowest_price": record["lowest_price"],
+            "lowest_price": price,
             "already_tracked": existing is not None,
         })
+
+    # Sort by event date ascending
+    results.sort(key=lambda r: r["event_date"] or "")
     return results
 
 
