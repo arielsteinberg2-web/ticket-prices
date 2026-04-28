@@ -23,6 +23,25 @@ export function EventSearch({ category, onTracked, events = [], onSelect, onBrow
     ? events.filter(e => e.name.toLowerCase().includes(query.trim().toLowerCase()))
     : [];
 
+  // When in browse mode, immediately show local matches in the panel, no dropdown
+  useEffect(() => {
+    if (!onBrowseResults) return;
+    const q = query.trim();
+    if (q.length < 2) return;
+    const immediate: import('../types').SearchResult[] = localMatches.map(e => ({
+      ticketmaster_id: `local_${e.id}`,
+      name: e.name,
+      category: e.category,
+      event_date: e.event_date,
+      venue: e.venue,
+      city: e.city,
+      lowest_price: e.latest_price,
+      already_tracked: true,
+      event_id: e.id,
+    }));
+    if (immediate.length > 0) onBrowseResults(immediate, q);
+  }, [query, localMatches.length]); // eslint-disable-line
+
   const handleSearch = async (q = query) => {
     if (!q.trim()) return;
     setLoading(true);
@@ -46,7 +65,7 @@ export function EventSearch({ category, onTracked, events = [], onSelect, onBrow
 
   // Auto-search after user stops typing for 500ms
   useEffect(() => {
-    if (query.trim().length < 2) { setResults([]); setError(null); return; }
+    if (query.trim().length < 2) { setResults([]); setError(null); if (onBrowseResults) onBrowseResults([], ''); return; }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => handleSearch(query), 500);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -71,7 +90,8 @@ export function EventSearch({ category, onTracked, events = [], onSelect, onBrow
     setResults([]);
   };
 
-  const showLocalSuggestions = localMatches.length > 0 && results.length === 0;
+  // Don't show dropdown when browse panel is handling results
+  const showLocalSuggestions = !onBrowseResults && localMatches.length > 0 && results.length === 0;
 
   return (
     <div style={{ padding: '10px 12px', borderBottom: '1px solid #222', background: '#111118', position: 'relative', zIndex: 100 }}>

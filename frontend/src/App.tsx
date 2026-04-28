@@ -213,7 +213,7 @@ export default function App() {
                 onTracked={() => loadEvents(activeTab, true)}
                 events={events}
                 onSelect={e => setSelectedEvent(e)}
-                onBrowseResults={activeTab === 'events' ? (r, q) => { setBrowseResults(r); setBrowseQuery(q); } : undefined}
+                onBrowseResults={activeTab === 'events' ? (r, q) => { if (r.length === 0 && !q) { setBrowseResults([]); setBrowseQuery(''); } else { setBrowseResults(r); if (q) setBrowseQuery(q); } } : undefined}
               />
             </div>
 
