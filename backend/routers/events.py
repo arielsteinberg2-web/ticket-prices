@@ -38,7 +38,10 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
             if e.city is None or any(h in e.city.lower() for h in WC_HOST_CITIES)
         ]
     else:
-        query = query.filter(not_(Event.name.ilike('%World Cup%')))
+        query = query.filter(
+            not_(Event.name.ilike('%World Cup%')),
+            not_(Event.name.ilike('%FIFA%')),
+        )
         events = query.all()
 
     result = []
@@ -211,9 +214,18 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
         if e.ticketmaster_id
     }
 
+    WC_KEYWORDS = ('world cup', 'fifa', 'coupe du monde')
+
     results = []
     for raw in raw_events[:100]:
         record = build_event_record(raw, category)
+
+        # When browsing events, exclude world cup / FIFA matches
+        if category == 'events':
+            name_lower = record["name"].lower()
+            if any(kw in name_lower for kw in WC_KEYWORDS):
+                continue
+
         existing = tracked_by_tmid.get(record["ticketmaster_id"])
 
         # For already-tracked events use the stored TickPick/DB price
