@@ -44,6 +44,15 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
         )
         events = query.all()
 
+    # Deduplicate events by (name, date) — keep the one with the most snapshots
+    seen_events: dict[tuple, Event] = {}
+    for event in events:
+        date_key = event.event_date.date().isoformat() if event.event_date else ""
+        key = (event.name.lower(), date_key)
+        if key not in seen_events or len(event.snapshots) > len(seen_events[key].snapshots):
+            seen_events[key] = event
+    events = sorted(seen_events.values(), key=lambda e: e.event_date or datetime.datetime.max)
+
     result = []
     for event in events:
         qty = event.quantity or 1
@@ -249,9 +258,18 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
             "event_id": existing.id if existing else None,
         })
 
+    # Deduplicate by (date, venue) — TM sometimes returns the same event multiple times
+    seen: set[tuple] = set()
+    deduped = []
+    for r in results:
+        key = (r["event_date"], (r["venue"] or "").lower())
+        if key not in seen:
+            seen.add(key)
+            deduped.append(r)
+
     # Sort by event date ascending
-    results.sort(key=lambda r: r["event_date"] or "")
-    return results
+    deduped.sort(key=lambda r: r["event_date"] or "")
+    return deduped
 
 
 class TrackRequest(BaseModel):
