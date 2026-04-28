@@ -218,7 +218,7 @@ export default function App() {
               <EventSearch
                 category={activeTab}
                 onTracked={() => loadEvents(activeTab, true)}
-                events={events}
+                events={filteredEvents}
                 onSelect={e => setSelectedEvent(e)}
                 onBrowseResults={activeTab === 'events' ? (r, q) => { if (r.length === 0 && !q) { setBrowseResults([]); setBrowseQuery(''); } else { setBrowseResults(r); if (q) setBrowseQuery(q); } } : undefined}
               />
