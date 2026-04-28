@@ -246,6 +246,7 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
             "city": record["city"],
             "lowest_price": price,
             "already_tracked": existing is not None,
+            "event_id": existing.id if existing else None,
         })
 
     # Sort by event date ascending

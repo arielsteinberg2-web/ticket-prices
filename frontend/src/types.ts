@@ -39,5 +39,6 @@ export interface SearchResult {
   city: string | null;
   lowest_price: number | null;
   already_tracked: boolean;
+  event_id?: number | null;
   tickpick_url?: string;
 }

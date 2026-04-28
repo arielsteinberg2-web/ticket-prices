@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SearchResult, Event } from '../types';
-import { trackEvent } from '../api';
+import { trackEvent, deleteEvent } from '../api';
 
 interface Props {
   query: string;
@@ -22,30 +22,51 @@ function fmtDate(iso: string | null): { top: string; bot: string } {
 }
 
 export function BrowsePanel({ query, results, trackedEvents, onTracked, onClose, isMobile }: Props) {
-  const [tracked, setTracked] = useState<Set<string>>(new Set());
-  const [tracking, setTracking] = useState<Set<string>>(new Set());
+  const [localTracked, setLocalTracked] = useState<Set<string>>(new Set());
+  const [localUntracked, setLocalUntracked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  const trackedIds = new Set(trackedEvents.map(e => e.name + '|' + e.event_date));
+  const isTracked = (r: SearchResult) =>
+    !localUntracked.has(r.ticketmaster_id) &&
+    (r.already_tracked || localTracked.has(r.ticketmaster_id));
+
+  const getEventId = (r: SearchResult): number | null => {
+    if (r.event_id) return r.event_id;
+    // fall back: match by name in trackedEvents
+    const match = trackedEvents.find(e => e.name === r.name);
+    return match?.id ?? null;
+  };
 
   const handleTrack = async (r: SearchResult) => {
-    setTracking(prev => new Set([...prev, r.ticketmaster_id]));
+    setBusy(prev => new Set([...prev, r.ticketmaster_id]));
     setError(null);
     try {
       await trackEvent({ ...r, category: 'events' });
-      setTracked(prev => new Set([...prev, r.ticketmaster_id]));
+      setLocalTracked(prev => new Set([...prev, r.ticketmaster_id]));
       onTracked();
     } catch {
       setError('Failed to track. Try again.');
     } finally {
-      setTracking(prev => { const s = new Set(prev); s.delete(r.ticketmaster_id); return s; });
+      setBusy(prev => { const s = new Set(prev); s.delete(r.ticketmaster_id); return s; });
     }
   };
 
-  const isTracked = (r: SearchResult) =>
-    r.already_tracked ||
-    tracked.has(r.ticketmaster_id) ||
-    trackedIds.has(r.name + '|' + r.event_date);
+  const handleUntrack = async (r: SearchResult) => {
+    const id = getEventId(r);
+    if (!id) return;
+    setBusy(prev => new Set([...prev, r.ticketmaster_id]));
+    setError(null);
+    try {
+      await deleteEvent(id);
+      setLocalUntracked(prev => new Set([...prev, r.ticketmaster_id]));
+      onTracked();
+    } catch {
+      setError('Failed to untrack. Try again.');
+    } finally {
+      setBusy(prev => { const s = new Set(prev); s.delete(r.ticketmaster_id); return s; });
+    }
+  };
 
   return (
     <div style={{
@@ -93,15 +114,15 @@ export function BrowsePanel({ query, results, trackedEvents, onTracked, onClose,
       <div style={{ overflowY: 'auto', flex: 1 }}>
         {results.map(r => {
           const { top, bot } = fmtDate(r.event_date);
-          const done = isTracked(r);
-          const busy = tracking.has(r.ticketmaster_id);
+          const tracked = isTracked(r);
+          const isBusy = busy.has(r.ticketmaster_id);
           return (
             <div
               key={r.ticketmaster_id}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '10px 12px', borderBottom: '1px solid #111',
-                background: done ? '#0f1f18' : 'transparent',
+                background: tracked ? '#0f1f18' : 'transparent',
               }}
             >
               {/* Date column */}
@@ -131,22 +152,23 @@ export function BrowsePanel({ query, results, trackedEvents, onTracked, onClose,
                 )}
               </div>
 
-              {/* Track button */}
+              {/* Track / Untrack button */}
               <button
-                onClick={() => !done && !busy && handleTrack(r)}
-                disabled={done || busy}
+                onClick={() => !isBusy && (tracked ? handleUntrack(r) : handleTrack(r))}
+                disabled={isBusy}
+                title={tracked ? 'Click to untrack' : 'Track this event'}
                 style={{
                   flexShrink: 0,
                   padding: '4px 9px', borderRadius: 5, fontSize: 10,
-                  background: done ? '#1a3a2a' : '#a78bfa20',
-                  border: `1px solid ${done ? '#34d39970' : '#a78bfa50'}`,
-                  color: done ? '#34d399' : '#a78bfa',
-                  cursor: (done || busy) ? 'default' : 'pointer',
-                  opacity: busy ? 0.5 : 1,
+                  background: tracked ? '#1a3a2a' : '#a78bfa20',
+                  border: `1px solid ${tracked ? '#34d39970' : '#a78bfa50'}`,
+                  color: tracked ? '#34d399' : '#a78bfa',
+                  cursor: isBusy ? 'default' : 'pointer',
+                  opacity: isBusy ? 0.5 : 1,
                   whiteSpace: 'nowrap',
                 }}
               >
-                {busy ? '…' : done ? '✓' : '+ Track'}
+                {isBusy ? '…' : tracked ? '✓ Tracking' : '+ Track'}
               </button>
             </div>
           );

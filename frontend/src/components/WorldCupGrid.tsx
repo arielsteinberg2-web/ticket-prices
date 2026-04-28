@@ -85,10 +85,11 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete, showTeams
               onClick={e => { e.stopPropagation(); onDelete(event.id); }}
               style={{
                 position: 'absolute', top: 8, right: 10,
-                background: 'none', border: 'none', color: '#ffffff25',
-                cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
+                background: 'none', border: 'none', color: '#ffffff30',
+                cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: '2px 4px',
+                borderRadius: 3,
               }}
-              title="Remove"
+              title="Untrack"
             >✕</button>
 
             {teams.length > 0 ? (
