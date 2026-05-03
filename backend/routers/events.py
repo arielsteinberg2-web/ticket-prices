@@ -13,21 +13,29 @@ router = APIRouter(prefix="/api")
 
 @router.get("/events")
 def list_events(category: str = None, db: Session = Depends(get_session), x_user_id: str = Header(None)):
-    if not x_user_id:
-        return []
-    # Find events this user is tracking
-    ue_rows = db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()
-    if not ue_rows:
-        return []
-    ue_by_event_id = {ue.event_id: ue for ue in ue_rows}
-
     today = datetime.date.today()
-    query = db.query(Event).options(subqueryload(Event.snapshots)).filter(
-        Event.id.in_(list(ue_by_event_id.keys())),
-        (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min))
-    ).order_by(nullslast(Event.event_date.asc()))
-    if category:
-        query = query.filter(Event.category == category)
+
+    # World Cup events are global — shown to everyone, no per-user filtering
+    if category == 'world_cup':
+        ue_by_event_id: dict[int, UserEvent] = {}
+        query = db.query(Event).options(subqueryload(Event.snapshots)).filter(
+            (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min))
+        ).order_by(nullslast(Event.event_date.asc()))
+    else:
+        if not x_user_id:
+            return []
+        # Find events this user is tracking
+        ue_rows = db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()
+        if not ue_rows:
+            return []
+        ue_by_event_id = {ue.event_id: ue for ue in ue_rows}
+
+        query = db.query(Event).options(subqueryload(Event.snapshots)).filter(
+            Event.id.in_(list(ue_by_event_id.keys())),
+            (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min))
+        ).order_by(nullslast(Event.event_date.asc()))
+        if category:
+            query = query.filter(Event.category == category)
 
     WC_HOST_CITIES = {
         'new york', 'new jersey', 'east rutherford', 'los angeles', 'inglewood',
