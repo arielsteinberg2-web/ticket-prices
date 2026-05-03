@@ -33,7 +33,7 @@ export function PriceChart({ snapshots }: Props) {
   }));
 
   const prices = snapshots.map(s => s.lowest_price);
-  const minY = Math.floor(Math.min(...prices) * 0.9);
+  const minY = Math.max(0, Math.floor(Math.min(...prices) * 0.9));
   const maxY = Math.ceil(Math.max(...prices) * 1.1);
 
   // Show at most ~6 ticks to avoid crowding
