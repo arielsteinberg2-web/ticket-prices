@@ -60,3 +60,26 @@ export async function fetchStatus(): Promise<any> {
   const { data } = await base.get('/status');
   return data;
 }
+
+export type AlertMap = Record<number, { threshold_price: number; email: string }>;
+
+export async function fetchAlerts(): Promise<AlertMap> {
+  const { data } = await base.get<AlertMap>('/alerts');
+  return data;
+}
+
+export async function setAlert(eventId: number, email: string, thresholdPrice: number): Promise<void> {
+  await base.post('/alerts', { event_id: eventId, email, threshold_price: thresholdPrice });
+}
+
+export async function deleteAlert(eventId: number): Promise<void> {
+  await base.delete(`/alerts/${eventId}`);
+}
+
+export function getSavedEmail(): string {
+  return localStorage.getItem('ticket_alert_email') || '';
+}
+
+export function saveEmail(email: string): void {
+  localStorage.setItem('ticket_alert_email', email);
+}

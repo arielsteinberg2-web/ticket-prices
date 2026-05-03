@@ -47,6 +47,19 @@ class UserEvent(Base):
     quantity = Column(Integer, nullable=False, default=1)
 
 
+class UserEventAlert(Base):
+    """Price drop alert: notify user by email when price falls below threshold."""
+    __tablename__ = "user_event_alerts"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, nullable=False)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    email = Column(String, nullable=False)
+    threshold_price = Column(Float, nullable=False)
+    last_alerted_at = Column(DateTime, nullable=True)
+    last_alert_price = Column(Float, nullable=True)
+
+
 class PriceAlert(Base):
     __tablename__ = "price_alerts"
 
@@ -105,6 +118,9 @@ def init_db(engine=None):
             conn.commit()
     except Exception:
         pass  # Column already exists
+
+    # Add user_event_alerts table if it doesn't exist (create_all handles new tables)
+    # (handled by Base.metadata.create_all above)
 
     # Add user_id column if it doesn't exist
     try:

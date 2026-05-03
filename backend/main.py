@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from backend.db import init_db
 from backend.routers.events import router
+from backend.routers.alerts import router as alerts_router
 
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
@@ -41,6 +42,7 @@ class CacheStaticMiddleware(BaseHTTPMiddleware):
 app.add_middleware(CacheStaticMiddleware)
 
 app.include_router(router)
+app.include_router(alerts_router)
 
 
 @app.get("/health")

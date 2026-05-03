@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { Category, Event, PriceSnapshot, Prediction } from './types';
-import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus, setQuantity } from './api';
+import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus, setQuantity, fetchAlerts } from './api';
+import type { AlertMap } from './api';
 import { WorldCupGrid } from './components/WorldCupGrid';
 import { PriceChart } from './components/PriceChart';
 import { BuyRecommendation } from './components/BuyRecommendation';
@@ -36,6 +37,7 @@ export default function App() {
   const [browseResults, setBrowseResults] = useState<SearchResult[]>([]);
   const [browseQuery, setBrowseQuery] = useState('');
   const [browseLoading, setBrowseLoading] = useState(false);
+  const [alerts, setAlerts] = useState<AlertMap>({});
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -45,6 +47,7 @@ export default function App() {
 
   useEffect(() => {
     fetchStatus().then(s => setTokenDays(s?.tickpick_token?.days_remaining ?? null));
+    fetchAlerts().then(setAlerts).catch(() => {});
   }, []);
 
   const loadEvents = useCallback(async (category: Category, silent = false) => {
@@ -269,6 +272,8 @@ export default function App() {
               selectedId={selectedEvent?.id ?? null}
               onSelect={e => setSelectedEvent(e)}
               onDelete={handleDelete}
+              alerts={alerts}
+              onAlertsChange={setAlerts}
               showTeams={activeTab === 'world_cup'}
               quantity={quantity[activeTab]}
               isMobile={isMobile}
