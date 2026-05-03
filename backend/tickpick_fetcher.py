@@ -228,6 +228,51 @@ def _name_to_keywords(event_name: str) -> list[str]:
     return [w for w in words if w not in _STOP_WORDS and len(w) > 1]
 
 
+def search_sitemap_by_keyword(keyword: str, limit: int = 100) -> list[dict]:
+    """Search TickPick sitemap cache for events matching keyword. Returns results sorted by date.
+
+    Parses slug format: {event-name}-tickets-{venue}
+    Returns: [{ticketmaster_id, tickpick_id, name, venue, event_date}]
+    """
+    events = _get_sitemap_events()
+    if not events:
+        return []
+
+    kw_parts = [p for p in keyword.lower().split() if p and len(p) > 1]
+    if not kw_parts:
+        return []
+
+    today_str = date.today().isoformat()
+    results = []
+    for evt in events:
+        if evt.get("date", "") < today_str:
+            continue
+        slug = evt["slug"]
+        if not all(p in slug for p in kw_parts):
+            continue
+
+        if "-tickets-" in slug:
+            name_part, venue_part = slug.split("-tickets-", 1)
+        else:
+            name_part = slug
+            venue_part = ""
+
+        name = " ".join(w.capitalize() for w in name_part.split("-"))
+        venue = " ".join(w.capitalize() for w in venue_part.split("-")) if venue_part else None
+
+        results.append({
+            "ticketmaster_id": f"tp_{evt['id']}",
+            "tickpick_id": evt["id"],
+            "name": name,
+            "venue": venue,
+            "city": None,
+            "event_date": evt["date"] + "T00:00:00",
+        })
+
+    results.sort(key=lambda x: x["event_date"])
+    return results[:limit]
+
+
 def find_tickpick_id(event_name: str, event_date) -> Optional[str]:
     """Find a TickPick event ID by matching name keywords + date against sitemaps.
 

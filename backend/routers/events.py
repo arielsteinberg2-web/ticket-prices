@@ -235,15 +235,72 @@ def trigger_fetch(db: Session = Depends(get_session)):
 
 
 @router.get("/search")
-def search_events(q: str, category: str = "sports", db: Session = Depends(get_session)):
-    """Search Ticketmaster live for events matching q. Returns up to 100 results sorted by date."""
+def search_events(q: str, category: str = "events", db: Session = Depends(get_session), x_user_id: str = Header(None)):
+    """Search events. Uses TickPick sitemap cache (instant) first; falls back to Ticketmaster live search."""
+    from backend.tickpick_fetcher import search_sitemap_by_keyword
+
+    WC_KEYWORDS = ('world cup', 'fifa', 'coupe du monde')
+
+    # --- Fast path: TickPick sitemap cache (in-memory, no network) ---
+    sitemap_hits = search_sitemap_by_keyword(q, limit=100)
+
+    if category == 'events':
+        sitemap_hits = [r for r in sitemap_hits if not any(kw in r['name'].lower() for kw in WC_KEYWORDS)]
+
+    if sitemap_hits:
+        # Batch-load any existing DB events by tickpick_id
+        tp_ids = [r['tickpick_id'] for r in sitemap_hits]
+        existing_by_tpid: dict[str, Event] = {
+            e.tickpick_id: e
+            for e in db.query(Event).options(subqueryload(Event.snapshots)).filter(
+                Event.tickpick_id.in_(tp_ids)
+            ).all()
+            if e.tickpick_id
+        }
+        # User's tracked event IDs
+        user_event_ids: set[int] = set()
+        if x_user_id:
+            user_event_ids = {ue.event_id for ue in db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()}
+
+        results = []
+        seen: set[tuple] = set()
+        for r in sitemap_hits:
+            key = (r['event_date'][:10], r['name'].lower()[:30])
+            if key in seen:
+                continue
+            seen.add(key)
+
+            existing = existing_by_tpid.get(r['tickpick_id'])
+            price = None
+            if existing:
+                snaps = sorted(
+                    [s for s in existing.snapshots if s.source == 'tickpick' and (s.quantity or 1) == 1],
+                    key=lambda s: s.fetched_at,
+                )
+                if snaps:
+                    price = snaps[-1].lowest_price
+
+            results.append({
+                "ticketmaster_id": r['ticketmaster_id'],
+                "name": r['name'],
+                "category": category,
+                "event_date": r['event_date'],
+                "venue": r['venue'],
+                "city": r['city'],
+                "lowest_price": price,
+                "already_tracked": existing is not None and existing.id in user_event_ids,
+                "event_id": existing.id if existing else None,
+            })
+        return results
+
+    # --- Slow fallback: Ticketmaster live API ---
     from backend.fetcher import fetch_events, build_event_record
     from backend.config import TICKETMASTER_API_KEY
 
     if category == "world_cup":
         classification = "Sports"
     elif category == "events":
-        classification = None  # search all types
+        classification = None
     else:
         classification = "Sports"
     try:
@@ -251,7 +308,6 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
     except Exception:
         return []
 
-    # Pre-load all tracked events with their snapshots in one query
     tracked_by_tmid: dict[str, Event] = {
         e.ticketmaster_id: e
         for e in db.query(Event).options(subqueryload(Event.snapshots)).filter(
@@ -259,22 +315,17 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
         ).all()
         if e.ticketmaster_id
     }
-
-    WC_KEYWORDS = ('world cup', 'fifa', 'coupe du monde')
+    user_event_ids_tm: set[int] = set()
+    if x_user_id:
+        user_event_ids_tm = {ue.event_id for ue in db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()}
 
     results = []
     for raw in raw_events[:100]:
         record = build_event_record(raw, category)
-
-        # When browsing events, exclude world cup / FIFA matches
         if category == 'events':
-            name_lower = record["name"].lower()
-            if any(kw in name_lower for kw in WC_KEYWORDS):
+            if any(kw in record["name"].lower() for kw in WC_KEYWORDS):
                 continue
-
         existing = tracked_by_tmid.get(record["ticketmaster_id"])
-
-        # For already-tracked events use the stored TickPick/DB price
         price = record["lowest_price"]
         if existing:
             all_snaps = sorted(existing.snapshots, key=lambda s: s.fetched_at)
@@ -282,7 +333,6 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
             qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
             if qty_snaps:
                 price = qty_snaps[-1].lowest_price
-
         results.append({
             "ticketmaster_id": record["ticketmaster_id"],
             "name": record["name"],
@@ -291,20 +341,17 @@ def search_events(q: str, category: str = "sports", db: Session = Depends(get_se
             "venue": record["venue"],
             "city": record["city"],
             "lowest_price": price,
-            "already_tracked": existing is not None,
+            "already_tracked": existing is not None and existing.id in user_event_ids_tm,
             "event_id": existing.id if existing else None,
         })
 
-    # Deduplicate by (date, venue) — TM sometimes returns the same event multiple times
-    seen: set[tuple] = set()
+    seen2: set[tuple] = set()
     deduped = []
     for r in results:
         key = (r["event_date"], (r["venue"] or "").lower())
-        if key not in seen:
-            seen.add(key)
+        if key not in seen2:
+            seen2.add(key)
             deduped.append(r)
-
-    # Sort by event date ascending
     deduped.sort(key=lambda r: r["event_date"] or "")
     return deduped
 

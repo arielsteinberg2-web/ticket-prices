@@ -191,6 +191,19 @@ def run_fetch_job(db: Session = None, force: bool = False):
             db.close()
 
 
+def _refresh_tickpick_sitemap():
+    """Refresh TickPick sitemap cache so search results are always instant."""
+    from backend.config import TICKPICK_TOKEN
+    from backend.tickpick_fetcher import refresh_sitemap_cache
+    if not TICKPICK_TOKEN:
+        return
+    try:
+        count = refresh_sitemap_cache()
+        logger.info("Sitemap refresh complete — %d events cached", count)
+    except Exception as e:
+        logger.error("Sitemap refresh failed: %s", e)
+
+
 def start_scheduler() -> BackgroundScheduler:
     """Start APScheduler to run run_fetch_job every 4 hours, immediately on startup."""
     import datetime
@@ -203,6 +216,15 @@ def start_scheduler() -> BackgroundScheduler:
         replace_existing=True,
         next_run_time=datetime.datetime.now(),  # run immediately on startup
     )
+    # Refresh TickPick sitemap every 12 hours so search results stay current
+    scheduler.add_job(
+        _refresh_tickpick_sitemap,
+        trigger="interval",
+        hours=12,
+        id="sitemap_refresh",
+        replace_existing=True,
+        next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=30),
+    )
     scheduler.start()
-    logger.info("Scheduler started — price fetch every 4 hours (first run: now)")
+    logger.info("Scheduler started — price fetch every 4 hours, sitemap refresh every 12 hours")
     return scheduler
