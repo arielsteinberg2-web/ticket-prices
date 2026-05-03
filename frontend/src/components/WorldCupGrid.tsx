@@ -274,7 +274,7 @@ export function WorldCupGrid({ events, selectedId, onSelect, onDelete, alerts, o
                 )}
               </div>
               {event.price_history && event.price_history.length >= 2 && (
-                <Sparkline prices={event.price_history} />
+                <Sparkline prices={event.price_history.map(s => s.lowest_price)} />
               )}
             </div>
           </div>

@@ -94,8 +94,14 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedEvent) return;
-    setSnapshots([]);
+    // Show cached price history instantly — no waiting
+    if (selectedEvent.price_history?.length) {
+      setSnapshots(selectedEvent.price_history);
+    } else {
+      setSnapshots([]);
+    }
     setPrediction(null);
+    // Fetch full history (may have more than 20 points) + prediction in background
     Promise.all([
       fetchHistory(selectedEvent.id),
       fetchPrediction(selectedEvent.id),

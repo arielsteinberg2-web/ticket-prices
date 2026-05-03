@@ -12,7 +12,7 @@ export interface Event {
   weekly_change_pct: number | null;
   snapshot_count: number;
   price_source?: string | null;
-  price_history?: number[];
+  price_history?: PriceSnapshot[];
   prices_by_qty?: Record<number, number>;
 }
 

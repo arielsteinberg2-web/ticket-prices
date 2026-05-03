@@ -84,7 +84,10 @@ def _build_events_result(events: list, snaps_by_event: dict, ue_by_event_id: dic
             "weekly_change_pct": weekly_change,
             "snapshot_count": len(qty_snaps),
             "price_source": qty_snaps[-1].source if qty_snaps else None,
-            "price_history": [s.lowest_price for s in qty_snaps[-20:]],
+            "price_history": [
+                {"fetched_at": s.fetched_at.isoformat(), "lowest_price": s.lowest_price}
+                for s in qty_snaps[-20:]
+            ],
             "prices_by_qty": prices_by_qty,
         })
     return result
