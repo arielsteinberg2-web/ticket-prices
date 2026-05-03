@@ -6,7 +6,6 @@ import type { PriceSnapshot } from '../types';
 
 interface Props {
   snapshots: PriceSnapshot[];
-  slope?: number;
 }
 
 function formatTick(iso: string) {
@@ -19,7 +18,7 @@ function formatTick(iso: string) {
   });
 }
 
-export function PriceChart({ snapshots, slope }: Props) {
+export function PriceChart({ snapshots }: Props) {
   if (snapshots.length === 0) {
     return (
       <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.4 }}>
@@ -28,10 +27,9 @@ export function PriceChart({ snapshots, slope }: Props) {
     );
   }
 
-  const chartData = snapshots.map((s, i) => ({
+  const chartData = snapshots.map((s) => ({
     label: formatTick(s.fetched_at),
     price: s.lowest_price,
-    trend: slope != null ? +(snapshots[0].lowest_price + slope * i).toFixed(2) : undefined,
   }));
 
   const prices = snapshots.map(s => s.lowest_price);
@@ -67,19 +65,8 @@ export function PriceChart({ snapshots, slope }: Props) {
             strokeWidth={2.5} dot={{ r: 3, fill: '#34d399' }} activeDot={{ r: 5 }}
             name="Actual price"
           />
-          {slope != null && (
-            <Line
-              type="linear" dataKey="trend" stroke="#a78bfa"
-              strokeWidth={1.5} strokeDasharray="6 4" dot={false}
-              name="Trend"
-            />
-          )}
         </LineChart>
       </ResponsiveContainer>
-      <div style={{ display: 'flex', gap: 16, fontSize: 11, padding: '4px 16px', opacity: 0.6 }}>
-        <span><span style={{ color: '#34d399' }}>—</span> actual price</span>
-        {slope != null && <span><span style={{ color: '#a78bfa' }}>- -</span> trend line</span>}
-      </div>
     </div>
   );
 }

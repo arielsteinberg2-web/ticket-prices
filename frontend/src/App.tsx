@@ -140,7 +140,7 @@ export default function App() {
   const detailPanel = selectedEvent && (
     <>
       <BuyRecommendation event={selectedEvent} snapshots={snapshots} prediction={prediction} />
-      <PriceChart snapshots={snapshots} slope={prediction?.slope} />
+      <PriceChart snapshots={snapshots} />
     </>
   );
 
