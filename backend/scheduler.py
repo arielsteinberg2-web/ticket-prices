@@ -150,7 +150,21 @@ def run_fetch_job(db: Session = None, force: bool = False):
             tp_events = db.query(Event).filter(Event.tickpick_id.isnot(None)).all()
             for event in tp_events:
                 prices_by_qty = fetch_tickpick_prices_all_qty(event.tickpick_id, TICKPICK_TOKEN)
+                # Build a map of previous latest price per quantity to detect anomalies
+                all_snaps = sorted(event.snapshots, key=lambda s: s.fetched_at)
+                prev_by_qty: dict[int, float] = {}
+                for s in all_snaps:
+                    if s.source == "tickpick":
+                        prev_by_qty[s.quantity or 1] = s.lowest_price
+
                 for qty, price in prices_by_qty.items():
+                    prev = prev_by_qty.get(qty)
+                    if prev and price < prev * 0.30:
+                        logger.warning(
+                            "Rejecting anomalous TickPick price for '%s' qty=%d: $%.2f → $%.2f (>70%% drop)",
+                            event.name, qty, prev, price,
+                        )
+                        continue
                     db.add(PriceSnapshot(
                         event_id=event.id,
                         fetched_at=now,

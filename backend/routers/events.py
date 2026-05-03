@@ -1,10 +1,10 @@
 import datetime
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy import not_, nullslast
 from sqlalchemy.orm import Session, subqueryload
 from pydantic import BaseModel
 from typing import Optional
-from backend.db import Event, PriceSnapshot, get_session
+from backend.db import Event, PriceSnapshot, UserEvent, get_session
 from backend.prediction import predict
 from backend.ai_prediction import ai_predict
 
@@ -12,9 +12,20 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/events")
-def list_events(category: str = None, db: Session = Depends(get_session)):
-    # Load events + all snapshots in 2 queries instead of N+1, sorted by date
-    query = db.query(Event).options(subqueryload(Event.snapshots)).order_by(nullslast(Event.event_date.asc()))
+def list_events(category: str = None, db: Session = Depends(get_session), x_user_id: str = Header(None)):
+    if not x_user_id:
+        return []
+    # Find events this user is tracking
+    ue_rows = db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()
+    if not ue_rows:
+        return []
+    ue_by_event_id = {ue.event_id: ue for ue in ue_rows}
+
+    today = datetime.date.today()
+    query = db.query(Event).options(subqueryload(Event.snapshots)).filter(
+        Event.id.in_(list(ue_by_event_id.keys())),
+        (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min))
+    ).order_by(nullslast(Event.event_date.asc()))
     if category:
         query = query.filter(Event.category == category)
 
@@ -55,7 +66,8 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
 
     result = []
     for event in events:
-        qty = event.quantity or 1
+        ue = ue_by_event_id.get(event.id)
+        qty = (ue.quantity if ue else None) or event.quantity or 1
         all_snaps = sorted(event.snapshots, key=lambda s: s.fetched_at)
 
         # Build prices_by_qty: latest price for each quantity (1-6)
@@ -67,7 +79,26 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
 
         # Use quantity-matched snapshots for display; fall back to all for old rows
         qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
+
+        # Reject the latest snapshot if it's an anomalous drop (>70% below previous)
+        def _clean_snaps(snaps):
+            if len(snaps) < 2:
+                return snaps
+            last, prev = snaps[-1].lowest_price, snaps[-2].lowest_price
+            if prev and last < prev * 0.30:
+                return snaps[:-1]
+            return snaps
+
+        qty_snaps = _clean_snaps(qty_snaps)
         latest_price = prices_by_qty.get(qty) or (qty_snaps[-1].lowest_price if qty_snaps else None)
+        # Also guard prices_by_qty against anomalies
+        if qty in prices_by_qty:
+            raw_qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty]
+            if len(raw_qty_snaps) >= 2:
+                last, prev = raw_qty_snaps[-1].lowest_price, raw_qty_snaps[-2].lowest_price
+                if prev and last < prev * 0.30:
+                    prices_by_qty[qty] = prev
+                    latest_price = prev
 
         week_ago_snap = qty_snaps[-8] if len(qty_snaps) >= 8 else (qty_snaps[0] if qty_snaps else None)
         weekly_change = None
@@ -94,12 +125,11 @@ def list_events(category: str = None, db: Session = Depends(get_session)):
 
 
 @router.delete("/events/{event_id}")
-def delete_event(event_id: int, db: Session = Depends(get_session)):
-    event = db.query(Event).filter(Event.id == event_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    db.query(PriceSnapshot).filter_by(event_id=event_id).delete()
-    db.delete(event)
+def delete_event(event_id: int, db: Session = Depends(get_session), x_user_id: str = Header(None)):
+    ue = db.query(UserEvent).filter_by(event_id=event_id, user_id=x_user_id).first()
+    if not ue:
+        raise HTTPException(status_code=404, detail="Event not tracked by this user")
+    db.delete(ue)
     db.commit()
     return {"status": "ok"}
 
@@ -178,15 +208,22 @@ class QuantityRequest(BaseModel):
 
 
 @router.post("/quantity")
-def set_category_quantity(body: QuantityRequest, db: Session = Depends(get_session)):
-    """Set ticket quantity for all events in a category. Prices for all quantities are pre-fetched."""
+def set_category_quantity(body: QuantityRequest, db: Session = Depends(get_session), x_user_id: str = Header(None)):
+    """Set ticket quantity for all of this user's events in a category."""
     if not (1 <= body.quantity <= 6):
         raise HTTPException(status_code=400, detail="Quantity must be 1-6")
-    events = db.query(Event).filter(Event.category == body.category).all()
-    for event in events:
-        event.quantity = body.quantity
+    if not x_user_id:
+        return {"status": "ok", "updated": 0}
+    # Get the user's event IDs for this category
+    event_ids = [e.id for e in db.query(Event).filter(Event.category == body.category).all()]
+    ues = db.query(UserEvent).filter(
+        UserEvent.user_id == x_user_id,
+        UserEvent.event_id.in_(event_ids),
+    ).all()
+    for ue in ues:
+        ue.quantity = body.quantity
     db.commit()
-    return {"status": "ok", "updated": len(events)}
+    return {"status": "ok", "updated": len(ues)}
 
 
 @router.post("/fetch")
@@ -321,63 +358,75 @@ def _discover_tickpick_in_background(event_id: int, event_name: str, event_date:
 
 
 @router.post("/track")
-def track_event(body: TrackRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_session)):
+def track_event(body: TrackRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_session), x_user_id: str = Header(None)):
     """Add an event to the tracking list. Returns immediately; TickPick discovery runs in background."""
-    existing = db.query(Event).filter_by(ticketmaster_id=body.ticketmaster_id).first()
-    if existing:
-        return {"status": "already_tracked", "id": existing.id}
+    # Find or create the shared Event row
+    event = db.query(Event).filter_by(ticketmaster_id=body.ticketmaster_id).first()
 
-    event_date = None
-    if body.event_date:
-        try:
-            event_date = datetime.datetime.fromisoformat(body.event_date.replace("Z", "+00:00")).replace(tzinfo=None)
-        except ValueError:
-            pass
-
-    event = Event(
-        ticketmaster_id=body.ticketmaster_id,
-        name=body.name,
-        category=body.category,
-        event_date=event_date,
-        venue=body.venue,
-        city=body.city,
-    )
-    db.add(event)
-    db.flush()
-
-    now = datetime.datetime.utcnow()
-    price_saved = False
-
-    # Save price from search result immediately
-    tm_price = body.lowest_price
-    if tm_price is not None:
-        db.add(PriceSnapshot(event_id=event.id, fetched_at=now, lowest_price=tm_price, source="ticketmaster"))
-        price_saved = True
-
-    # Fall back to SeatGeek if no price
-    if not price_saved:
-        from backend.config import SEATGEEK_CLIENT_ID
-        from backend.seatgeek_fetcher import fetch_seatgeek_events, build_seatgeek_record
-        if SEATGEEK_CLIENT_ID:
+    if event is None:
+        event_date = None
+        if body.event_date:
             try:
-                for raw in fetch_seatgeek_events(body.name, SEATGEEK_CLIENT_ID)[:10]:
-                    record = build_seatgeek_record(raw, body.category)
-                    if record["lowest_price"] is None:
-                        continue
-                    sg_words = set(record["name"].lower().split())
-                    body_words = set(body.name.lower().split())
-                    if len(sg_words & body_words) / max(len(body_words), 1) > 0.4:
-                        event.seatgeek_id = record["seatgeek_id"]
-                        db.add(PriceSnapshot(event_id=event.id, fetched_at=now, lowest_price=record["lowest_price"], source="seatgeek"))
-                        price_saved = True
-                        break
-            except Exception:
+                event_date = datetime.datetime.fromisoformat(body.event_date.replace("Z", "+00:00")).replace(tzinfo=None)
+            except ValueError:
                 pass
+        event = Event(
+            ticketmaster_id=body.ticketmaster_id,
+            name=body.name,
+            category=body.category,
+            event_date=event_date,
+            venue=body.venue,
+            city=body.city,
+        )
+        db.add(event)
+        db.flush()
+
+        now = datetime.datetime.utcnow()
+        price_saved = False
+
+        # Save price from search result immediately
+        tm_price = body.lowest_price
+        if tm_price is not None:
+            db.add(PriceSnapshot(event_id=event.id, fetched_at=now, lowest_price=tm_price, source="ticketmaster"))
+            price_saved = True
+
+        # Fall back to SeatGeek if no price
+        if not price_saved:
+            from backend.config import SEATGEEK_CLIENT_ID
+            from backend.seatgeek_fetcher import fetch_seatgeek_events, build_seatgeek_record
+            if SEATGEEK_CLIENT_ID:
+                try:
+                    for raw in fetch_seatgeek_events(body.name, SEATGEEK_CLIENT_ID)[:10]:
+                        record = build_seatgeek_record(raw, body.category)
+                        if record["lowest_price"] is None:
+                            continue
+                        sg_words = set(record["name"].lower().split())
+                        body_words = set(body.name.lower().split())
+                        if len(sg_words & body_words) / max(len(body_words), 1) > 0.4:
+                            event.seatgeek_id = record["seatgeek_id"]
+                            db.add(PriceSnapshot(event_id=event.id, fetched_at=now, lowest_price=record["lowest_price"], source="seatgeek"))
+                            price_saved = True
+                            break
+                except Exception:
+                    pass
+    else:
+        price_saved = bool(event.snapshots)
+
+    # Check if user is already tracking this event
+    existing_ue = db.query(UserEvent).filter_by(event_id=event.id, user_id=x_user_id).first() if x_user_id else None
+    if existing_ue:
+        db.commit()
+        return {"status": "already_tracked", "id": event.id}
+
+    # Create UserEvent link
+    if x_user_id:
+        db.add(UserEvent(user_id=x_user_id, event_id=event.id, quantity=1))
 
     db.commit()
 
     # Discover TickPick ID in background (slow sitemap crawl — don't block the response)
-    if event_date:
-        background_tasks.add_task(_discover_tickpick_in_background, event.id, body.name, event_date)
+    event_date_val = event.event_date
+    if event_date_val and not event.tickpick_id:
+        background_tasks.add_task(_discover_tickpick_in_background, event.id, body.name, event_date_val)
 
     return {"status": "ok", "id": event.id, "price_fetched": price_saved}

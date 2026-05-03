@@ -21,6 +21,7 @@ class Event(Base):
     venue = Column(String, nullable=True)
     city = Column(String, nullable=True)
     quantity = Column(Integer, nullable=False, default=1)
+    user_id = Column(String, nullable=True)
     snapshots = relationship("PriceSnapshot", back_populates="event", lazy="select")
 
 
@@ -34,6 +35,16 @@ class PriceSnapshot(Base):
     source = Column(String, nullable=True, default="ticketmaster")
     quantity = Column(Integer, nullable=True, default=1)
     event = relationship("Event", back_populates="snapshots")
+
+
+class UserEvent(Base):
+    """Links a user to an event they are tracking, with their preferred quantity."""
+    __tablename__ = "user_events"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, nullable=False)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
 
 
 class PriceAlert(Base):
@@ -91,6 +102,14 @@ def init_db(engine=None):
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE price_snapshots ADD COLUMN quantity INTEGER DEFAULT 1"))
+            conn.commit()
+    except Exception:
+        pass  # Column already exists
+
+    # Add user_id column if it doesn't exist
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE events ADD COLUMN user_id VARCHAR"))
             conn.commit()
     except Exception:
         pass  # Column already exists

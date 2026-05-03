@@ -52,7 +52,7 @@ export default function App() {
     try {
       const data = await fetchEvents(category);
       setEvents(data);
-      if (!silent) setSelectedEvent(prev => prev ?? (data[0] ?? null));
+      if (!silent) setSelectedEvent(null);
       if (data.length > 0 && data[0].quantity) {
         setQuantityState(prev => ({ ...prev, [category]: data[0].quantity }));
       }

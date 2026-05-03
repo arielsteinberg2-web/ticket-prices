@@ -1,7 +1,20 @@
 import axios from 'axios';
 import type { Event, PriceSnapshot, Prediction, Category, SearchResult } from './types';
 
+function getUserId(): string {
+  let id = localStorage.getItem('ticket_user_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('ticket_user_id', id);
+  }
+  return id;
+}
+
 const base = axios.create({ baseURL: '/api' });
+base.interceptors.request.use(config => {
+  config.headers['X-User-Id'] = getUserId();
+  return config;
+});
 
 export async function fetchEvents(category?: Category): Promise<Event[]> {
   const params = category ? { category } : {};
