@@ -27,6 +27,7 @@ export interface Prediction {
   predicted_price_7d?: number;
   recommendation?: 'BUY NOW' | 'BUY SOON' | 'WAIT';
   slope?: number;
+  confidence?: 'low' | 'medium' | 'high';
   message?: string;
 }
 

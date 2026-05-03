@@ -7,6 +7,21 @@ interface Props {
   prediction: Prediction | null;
 }
 
+function ConfidenceDots({ confidence }: { confidence?: 'low' | 'medium' | 'high' }) {
+  const filled = confidence === 'high' ? 3 : confidence === 'medium' ? 2 : 1;
+  const color = confidence === 'high' ? '#34d399' : confidence === 'medium' ? '#f59e0b' : '#f87171';
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 3, marginTop: 5 }} title={`Confidence: ${confidence ?? 'low'}`}>
+      {[1, 2, 3].map(i => (
+        <div key={i} style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: i <= filled ? color : '#ffffff15',
+        }} />
+      ))}
+    </div>
+  );
+}
+
 const COLORS = {
   'BUY NOW':  { bg: '#1a3a2a', border: '#34d399', text: '#34d399' },
   'BUY SOON': { bg: '#3a2a1a', border: '#f59e0b', text: '#f59e0b' },
@@ -68,6 +83,7 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
                 {TREND_LABEL[prediction.trend]}
               </div>
             )}
+            <ConfidenceDots confidence={prediction.confidence} />
           </div>
         ) : (
           <div style={{
@@ -75,7 +91,7 @@ export function BuyRecommendation({ event, snapshots, prediction }: Props) {
             borderRadius: 8, padding: '8px 14px', textAlign: 'center', minWidth: 110, flexShrink: 0,
           }}>
             <div style={{ fontSize: 11, opacity: 0.4 }}>
-              {prediction == null ? 'Loading...' : 'Not enough data yet'}
+              {prediction == null ? 'Loading...' : 'Not enough data yet\n(7 days needed)'}
             </div>
           </div>
         )}

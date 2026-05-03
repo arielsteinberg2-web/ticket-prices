@@ -170,7 +170,7 @@ def get_prediction(event_id: int, quantity: int = None, db: Session = Depends(ge
 
     result = ai_predict(prices, event_name=event.name, event_date=event_date)
     if result is None:
-        return {"has_data": False, "message": "Not enough data yet (need at least 3 days)"}
+        return {"has_data": False, "message": "Not enough data yet (need at least 7 days)"}
 
     return {
         "has_data": True,
@@ -179,6 +179,7 @@ def get_prediction(event_id: int, quantity: int = None, db: Session = Depends(ge
         "recommendation": result.recommendation,
         "slope": result.slope,
         "score": result.score,
+        "confidence": result.confidence,
     }
 
 

@@ -1,12 +1,11 @@
 """
 Multi-factor ticket price prediction engine.
 
-Scoring factors:
-  1. Days until event — urgency
-  2. Price position vs own history — is it cheap right now?
-  3. Trend direction (exponentially weighted regression)
-  4. Recent momentum — is the trend reversing?
-  5. Trend strength — how steep is the change?
+Scoring is price-first; urgency acts as a floor on the recommendation,
+not a score booster. This prevents "BUY NOW" from being triggered by
+time pressure alone when prices are at all-time highs or still falling.
+
+Requires at least 7 unique days of price data.
 """
 import datetime
 from dataclasses import dataclass
@@ -22,6 +21,7 @@ class Prediction:
     recommendation: str               # "BUY NOW" | "BUY SOON" | "WAIT"
     slope: float                      # $/day (for chart trendline)
     score: int                        # raw score for debugging
+    confidence: str = "low"           # "low" | "medium" | "high"
 
 
 def _weighted_slope(X: np.ndarray, y: np.ndarray, weights: np.ndarray) -> float:
@@ -39,34 +39,39 @@ def predict(
     event_date: Optional[datetime.date] = None,
 ) -> Optional["Prediction"]:
     """
-    prices: list of (date, lowest_price) sorted ascending.
-    event_date: the event date, used for urgency.
-    Returns None if fewer than 3 data points.
+    prices: list of (date, lowest_price) — may contain multiple per day.
+    event_date: used for urgency floor.
+    Returns None if fewer than 7 unique days of data.
     """
-    if len(prices) < 3:
+    # Deduplicate to one price per day (keep last)
+    daily: dict[datetime.date, float] = {}
+    for d, p in prices:
+        daily[d] = p
+    daily_prices = sorted(daily.items())
+
+    if len(daily_prices) < 7:
         return None
 
     today = datetime.date.today()
-    base_date = prices[0][0]
+    base_date = daily_prices[0][0]
 
-    X = np.array([(p[0] - base_date).days for p in prices], dtype=float)
-    y = np.array([p[1] for p in prices], dtype=float)
+    X = np.array([(d - base_date).days for d, _ in daily_prices], dtype=float)
+    y = np.array([p for _, p in daily_prices], dtype=float)
 
+    n = len(X)
     current_price = float(y[-1])
     price_mean = float(y.mean())
     price_min = float(y.min())
     price_max = float(y.max())
     price_range = price_max - price_min
+    price_range_pct = (price_range / price_mean * 100) if price_mean > 0 else 0
 
-    # ── 1. Overall trend (exponential weights — recent data matters more) ──────
-    n = len(X)
-    weights = np.exp(np.linspace(0, 2, n))          # older → lower weight
-    slope = _weighted_slope(X, y, weights)           # $/day
-
-    # Normalize slope as % of mean price per day → scale-independent
+    # ── Overall trend (exponential weights — recent data matters more) ──────────
+    weights = np.exp(np.linspace(0, 2, n))
+    slope = _weighted_slope(X, y, weights)
     slope_pct_per_day = (slope / price_mean * 100) if price_mean > 0 else 0
 
-    FLAT_THRESHOLD = 0.25  # less than 0.25%/day change → flat
+    FLAT_THRESHOLD = 0.25
     if abs(slope_pct_per_day) < FLAT_THRESHOLD:
         trend = "flat"
     elif slope_pct_per_day > 0:
@@ -74,8 +79,8 @@ def predict(
     else:
         trend = "falling"
 
-    # ── 2. Recent momentum (last ~33% of data, min 3 points) ─────────────────
-    recent_n = max(3, n // 3)
+    # ── Recent momentum (last ~25% of data, min 4 points) ──────────────────────
+    recent_n = max(4, n // 4)
     recent_y = y[-recent_n:]
     recent_X = X[-recent_n:]
     recent_weights = np.exp(np.linspace(0, 2, recent_n))
@@ -86,79 +91,64 @@ def predict(
         (trend == "rising" and recent_slope_pct < -FLAT_THRESHOLD) or
         (trend == "falling" and recent_slope_pct > FLAT_THRESHOLD)
     )
+    trend_consistent = not momentum_reversing
 
-    # ── 3. Price position vs own history ──────────────────────────────────────
-    # 0 = at all-time low, 1 = at all-time high
+    # ── Price position vs own history ──────────────────────────────────────────
     price_position = (current_price - price_min) / price_range if price_range > 5 else 0.5
 
-    # ── 4. Days until event ────────────────────────────────────────────────────
+    # ── Days until event ────────────────────────────────────────────────────────
     days_until_event: Optional[int] = None
     if event_date:
         days_until_event = (event_date - today).days
 
-    # ── 5. 7-day price projection ──────────────────────────────────────────────
-    predicted_price_7d = round(current_price + slope * 7, 2)
+    # ── 7-day price projection (use recent slope — more predictive) ─────────────
+    proj_n = max(4, min(n, 14))
+    proj_y = y[-proj_n:]
+    proj_X = X[-proj_n:]
+    proj_weights = np.exp(np.linspace(0, 2, proj_n))
+    proj_slope = _weighted_slope(proj_X, proj_y, proj_weights)
+    predicted_price_7d = round(current_price + proj_slope * 7, 2)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SCORING — each factor contributes to a score:
-    #   ≥ 4  → BUY NOW
-    #   2-3  → BUY SOON
-    #   ≤ 1  → WAIT
+    # SCORING — price quality first, urgency applied as a floor afterward
     # ═══════════════════════════════════════════════════════════════════════════
     score = 0
 
-    # Factor A: Urgency from days until event
-    if days_until_event is not None:
-        if days_until_event <= 0:
-            score += 5   # event is today/past
-        elif days_until_event <= 14:
-            score += 4   # < 2 weeks — must buy now
-        elif days_until_event <= 30:
-            score += 3   # < 1 month — getting urgent
-        elif days_until_event <= 60:
-            score += 1   # 1-2 months — some urgency
-        # > 60 days → no urgency boost
-    else:
-        score += 1       # unknown date — slight lean toward buying
-
-    # Factor B: Price position (cheap = buy, expensive = wait)
+    # Factor A: Price position (is it cheap right now?)
     if price_position <= 0.15:
-        score += 3       # at or near all-time low — excellent entry
+        score += 3       # near all-time low — excellent entry
     elif price_position <= 0.35:
         score += 2       # below average — good entry
     elif price_position <= 0.55:
-        score += 1       # average — neutral
+        score += 1       # average
     elif price_position >= 0.80:
-        score -= 1       # near all-time high — consider waiting
+        score -= 1       # near all-time high — wait
 
-    # Factor C: Trend direction
+    # Factor B: Trend direction
     if trend == "falling":
-        # Prices dropping — wait for the bottom UNLESS event is near
-        if days_until_event is not None and days_until_event <= 30:
-            score += 1   # near event: falling prices won't last, buy soon
+        if days_until_event is not None and days_until_event <= 21:
+            score += 1   # near event: falling won't last, buy soon
         else:
-            score -= 1   # plenty of time: let prices fall further
+            score -= 1   # plenty of time: let it fall further
     elif trend == "rising":
-        # Prices rising — buy before they go higher
         if days_until_event is not None and days_until_event <= 45:
-            score += 1   # rising + event closing in = buy soon
+            score += 1   # rising + closing in = buy before it's higher
         else:
-            score -= 1   # rising but far out — might stabilize
+            score -= 1   # rising but far out — may stabilize
     elif trend == "flat":
-        score += 1       # stable prices — safe to buy anytime
+        score += 1       # stable — safe to buy anytime
 
-    # Factor D: Momentum reversal (trend changing direction)
-    if momentum_reversing:
-        if trend == "rising" and recent_slope_pct < -FLAT_THRESHOLD:
-            score += 1   # was rising, now dipping — could be a dip to buy
-        elif trend == "falling" and recent_slope_pct > FLAT_THRESHOLD:
-            score -= 1   # was falling, now bouncing — might fall more
+    # Factor C: Momentum reversal
+    if trend == "rising" and recent_slope_pct < -FLAT_THRESHOLD:
+        score += 1       # was rising, now dipping — dip to buy
+    elif trend == "falling" and recent_slope_pct > FLAT_THRESHOLD:
+        score -= 1       # was falling, now bouncing — might fall more
 
-    # Factor E: Trend strength penalty for strong rises (wait it out)
+    # Factor D: Strong rising trend + far event = definitely wait
     if slope_pct_per_day > 1.5 and (days_until_event is None or days_until_event > 45):
-        score -= 1       # aggressively rising and event is far — definitely wait
+        score -= 1
 
-    # ── Map score to recommendation ────────────────────────────────────────────
+    # ── Map score to base recommendation ───────────────────────────────────────
     if score >= 4:
         recommendation = "BUY NOW"
     elif score >= 2:
@@ -166,10 +156,44 @@ def predict(
     else:
         recommendation = "WAIT"
 
+    # ── Urgency floor (lifts recommendation, never lowers it) ──────────────────
+    if days_until_event is not None:
+        if days_until_event <= 7:
+            recommendation = "BUY NOW"          # must act now regardless of price
+        elif days_until_event <= 21 and recommendation == "WAIT":
+            recommendation = "BUY SOON"         # < 3 weeks — can't wait indefinitely
+        elif days_until_event <= 45 and recommendation == "WAIT" and trend != "falling":
+            recommendation = "BUY SOON"         # < 6 weeks, not actively falling
+
+    # ── Confidence ─────────────────────────────────────────────────────────────
+    conf_score = 0
+    if n >= 30:
+        conf_score += 3
+    elif n >= 14:
+        conf_score += 2
+    elif n >= 7:
+        conf_score += 1
+
+    if price_range_pct >= 15:
+        conf_score += 2  # meaningful price movement = reliable signal
+    elif price_range_pct >= 8:
+        conf_score += 1
+
+    if trend_consistent:
+        conf_score += 1  # trend not reversing = more reliable
+
+    if conf_score >= 5:
+        confidence = "high"
+    elif conf_score >= 3:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
     return Prediction(
         trend=trend,
         predicted_price_7d=predicted_price_7d,
         recommendation=recommendation,
         slope=round(slope, 4),
         score=score,
+        confidence=confidence,
     )
