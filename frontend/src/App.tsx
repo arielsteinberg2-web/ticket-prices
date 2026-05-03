@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Category, Event, PriceSnapshot, Prediction } from './types';
 import { fetchEvents, fetchHistory, fetchPrediction, triggerFetch, deleteEvent, fetchStatus, setQuantity, fetchAlerts } from './api';
 import type { AlertMap } from './api';
@@ -38,6 +38,7 @@ export default function App() {
   const [browseQuery, setBrowseQuery] = useState('');
   const [browseLoading, setBrowseLoading] = useState(false);
   const [alerts, setAlerts] = useState<AlertMap>({});
+  const eventsCache = useRef<Partial<Record<Category, { data: Event[]; ts: number }>>>({});
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -50,10 +51,26 @@ export default function App() {
     fetchAlerts().then(setAlerts).catch(() => {});
   }, []);
 
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   const loadEvents = useCallback(async (category: Category, silent = false) => {
+    const cached = eventsCache.current[category];
+    const fresh = cached && Date.now() - cached.ts < CACHE_TTL;
+
+    // Return cached data immediately if fresh and not a forced refresh
+    if (fresh && !silent) {
+      setEvents(cached!.data);
+      setSelectedEvent(null);
+      return;
+    }
+    if (fresh && silent) {
+      // Silent refresh: update in background without showing loader
+    }
+
     if (!silent) setLoading(true);
     try {
       const data = await fetchEvents(category);
+      eventsCache.current[category] = { data, ts: Date.now() };
       setEvents(data);
       if (!silent) setSelectedEvent(null);
       if (data.length > 0 && data[0].quantity) {
@@ -112,6 +129,7 @@ export default function App() {
     setFetching(true);
     try {
       await triggerFetch();
+      eventsCache.current = {}; // bust cache so next load is fresh
       setLastFetch(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }));
       await loadEvents(activeTab);
       if (selectedEvent) {

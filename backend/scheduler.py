@@ -178,6 +178,10 @@ def run_fetch_job(db: Session = None, force: bool = False):
         db.commit()
         logger.info("Fetch job complete at %s", now.isoformat())
 
+        # Invalidate WC cache so next request gets fresh data
+        import backend.routers.events as _ev_router
+        _ev_router._WC_CACHE = None
+
         # Check price alerts after every fetch
         from backend.alerts import check_and_send_alerts
         check_and_send_alerts(db)

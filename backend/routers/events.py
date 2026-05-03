@@ -1,4 +1,5 @@
 import datetime
+import time
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy import not_, nullslast
 from sqlalchemy.orm import Session, subqueryload
@@ -10,65 +11,21 @@ from backend.ai_prediction import ai_predict
 
 router = APIRouter(prefix="/api")
 
+# In-memory cache for world_cup list (same for all users, expensive to compute)
+_WC_CACHE: tuple[float, list] | None = None  # (timestamp, result)
+_WC_CACHE_TTL = 300  # 5 minutes
 
-@router.get("/events")
-def list_events(category: str = None, db: Session = Depends(get_session), x_user_id: str = Header(None)):
-    today = datetime.date.today()
 
-    # World Cup events are global — shown to everyone, no per-user filtering
-    if category == 'world_cup':
-        ue_by_event_id: dict[int, UserEvent] = {}
-        query = db.query(Event).options(subqueryload(Event.snapshots)).filter(
-            (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min))
-        ).order_by(nullslast(Event.event_date.asc()))
-    else:
-        if not x_user_id:
-            return []
-        # Find events this user is tracking
-        ue_rows = db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()
-        if not ue_rows:
-            return []
-        ue_by_event_id = {ue.event_id: ue for ue in ue_rows}
-
-        query = db.query(Event).options(subqueryload(Event.snapshots)).filter(
-            Event.id.in_(list(ue_by_event_id.keys())),
-            (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min))
-        ).order_by(nullslast(Event.event_date.asc()))
-        if category:
-            query = query.filter(Event.category == category)
-
-    WC_HOST_CITIES = {
-        'new york', 'new jersey', 'east rutherford', 'los angeles', 'inglewood',
-        'dallas', 'arlington', 'san francisco', 'santa clara', 'seattle',
-        'miami', 'miami gardens', 'boston', 'foxborough', 'kansas city',
-        'philadelphia', 'houston', 'atlanta', 'toronto', 'vancouver',
-        'guadalajara', 'zapopan', 'mexico city', 'monterrey',
-    }
-
-    if category == 'world_cup':
-        query = query.filter(
-            Event.name.ilike('%World Cup%'),
-            not_(Event.name.ilike('%FEI%')),
-            not_(Event.name.ilike('%Pacific%')),
-        )
-        events = query.all()
-        events = [
-            e for e in events
-            if e.city is None or any(h in e.city.lower() for h in WC_HOST_CITIES)
-        ]
-    else:
-        query = query.filter(
-            not_(Event.name.ilike('%World Cup%')),
-            not_(Event.name.ilike('%FIFA%')),
-        )
-        events = query.all()
-
-    # Deduplicate events by (name, date) — keep the one with the most snapshots
+def _build_events_result(events: list, snaps_by_event: dict, ue_by_event_id: dict) -> list:
+    """Compute the API response list from pre-loaded events and snapshots."""
+    # Deduplicate events by (name, date) — keep the one with more recent snapshots
     seen_events: dict[tuple, Event] = {}
     for event in events:
         date_key = event.event_date.date().isoformat() if event.event_date else ""
         key = (event.name.lower(), date_key)
-        if key not in seen_events or len(event.snapshots) > len(seen_events[key].snapshots):
+        cur_snaps = snaps_by_event.get(event.id, [])
+        existing = seen_events.get(key)
+        if existing is None or len(cur_snaps) > len(snaps_by_event.get(existing.id, [])):
             seen_events[key] = event
     events = sorted(seen_events.values(), key=lambda e: e.event_date or datetime.datetime.max)
 
@@ -76,30 +33,23 @@ def list_events(category: str = None, db: Session = Depends(get_session), x_user
     for event in events:
         ue = ue_by_event_id.get(event.id)
         qty = (ue.quantity if ue else None) or event.quantity or 1
-        all_snaps = sorted(event.snapshots, key=lambda s: s.fetched_at)
+        all_snaps = snaps_by_event.get(event.id, [])
 
-        # Build prices_by_qty: latest price for each quantity (1-6)
         prices_by_qty: dict[int, float] = {}
         for q in range(1, 7):
             q_snaps = [s for s in all_snaps if (s.quantity or 1) == q]
             if q_snaps:
                 prices_by_qty[q] = q_snaps[-1].lowest_price
 
-        # Use quantity-matched snapshots for display; fall back to all for old rows
         qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty] or all_snaps
 
-        # Reject the latest snapshot if it's an anomalous drop (>70% below previous)
-        def _clean_snaps(snaps):
-            if len(snaps) < 2:
-                return snaps
-            last, prev = snaps[-1].lowest_price, snaps[-2].lowest_price
+        # Reject anomalous drop (>70% below previous snapshot)
+        if len(qty_snaps) >= 2:
+            last, prev = qty_snaps[-1].lowest_price, qty_snaps[-2].lowest_price
             if prev and last < prev * 0.30:
-                return snaps[:-1]
-            return snaps
+                qty_snaps = qty_snaps[:-1]
 
-        qty_snaps = _clean_snaps(qty_snaps)
         latest_price = prices_by_qty.get(qty) or (qty_snaps[-1].lowest_price if qty_snaps else None)
-        # Also guard prices_by_qty against anomalies
         if qty in prices_by_qty:
             raw_qty_snaps = [s for s in all_snaps if (s.quantity or 1) == qty]
             if len(raw_qty_snaps) >= 2:
@@ -108,12 +58,20 @@ def list_events(category: str = None, db: Session = Depends(get_session), x_user
                     prices_by_qty[qty] = prev
                     latest_price = prev
 
-        week_ago_snap = qty_snaps[-8] if len(qty_snaps) >= 8 else (qty_snaps[0] if qty_snaps else None)
+        # Weekly change: compare to snapshot ~7 days ago
+        week_ago_snap = None
+        if qty_snaps:
+            target = qty_snaps[-1].fetched_at - datetime.timedelta(days=7)
+            week_ago_snap = min(qty_snaps, key=lambda s: abs((s.fetched_at - target).total_seconds()))
+            if week_ago_snap == qty_snaps[-1]:
+                week_ago_snap = qty_snaps[0]
+
         weekly_change = None
-        if latest_price and week_ago_snap and week_ago_snap.lowest_price:
+        if latest_price and week_ago_snap and week_ago_snap.lowest_price and week_ago_snap != qty_snaps[-1]:
             weekly_change = round(
                 (latest_price - week_ago_snap.lowest_price) / week_ago_snap.lowest_price * 100, 1
             )
+
         result.append({
             "id": event.id,
             "name": event.name,
@@ -130,6 +88,78 @@ def list_events(category: str = None, db: Session = Depends(get_session), x_user
             "prices_by_qty": prices_by_qty,
         })
     return result
+
+
+def _load_recent_snaps(db: Session, event_ids: list[int]) -> dict[int, list]:
+    """Load last 30 days of snapshots for the given event IDs, grouped by event_id."""
+    if not event_ids:
+        return {}
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    rows = db.query(PriceSnapshot).filter(
+        PriceSnapshot.event_id.in_(event_ids),
+        PriceSnapshot.fetched_at >= cutoff,
+    ).order_by(PriceSnapshot.event_id, PriceSnapshot.fetched_at.asc()).all()
+    by_event: dict[int, list] = {}
+    for s in rows:
+        by_event.setdefault(s.event_id, []).append(s)
+    return by_event
+
+
+@router.get("/events")
+def list_events(category: str = None, db: Session = Depends(get_session), x_user_id: str = Header(None)):
+    global _WC_CACHE
+    today = datetime.date.today()
+
+    WC_HOST_CITIES = {
+        'new york', 'new jersey', 'east rutherford', 'los angeles', 'inglewood',
+        'dallas', 'arlington', 'san francisco', 'santa clara', 'seattle',
+        'miami', 'miami gardens', 'boston', 'foxborough', 'kansas city',
+        'philadelphia', 'houston', 'atlanta', 'toronto', 'vancouver',
+        'guadalajara', 'zapopan', 'mexico city', 'monterrey',
+    }
+
+    # World Cup — same for everyone, cache the result
+    if category == 'world_cup':
+        if _WC_CACHE and time.time() - _WC_CACHE[0] < _WC_CACHE_TTL:
+            return _WC_CACHE[1]
+
+        events = db.query(Event).filter(
+            Event.name.ilike('%World Cup%'),
+            not_(Event.name.ilike('%FEI%')),
+            not_(Event.name.ilike('%Pacific%')),
+            (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min)),
+        ).order_by(nullslast(Event.event_date.asc())).all()
+
+        events = [
+            e for e in events
+            if e.city is None or any(h in e.city.lower() for h in WC_HOST_CITIES)
+        ]
+        event_ids = [e.id for e in events]
+        snaps_by_event = _load_recent_snaps(db, event_ids)
+        result = _build_events_result(events, snaps_by_event, {})
+        _WC_CACHE = (time.time(), result)
+        return result
+
+    # User events — per-user, no cache
+    if not x_user_id:
+        return []
+    ue_rows = db.query(UserEvent).filter(UserEvent.user_id == x_user_id).all()
+    if not ue_rows:
+        return []
+    ue_by_event_id = {ue.event_id: ue for ue in ue_rows}
+
+    events = db.query(Event).filter(
+        Event.id.in_(list(ue_by_event_id.keys())),
+        not_(Event.name.ilike('%World Cup%')),
+        not_(Event.name.ilike('%FIFA%')),
+        (Event.event_date == None) | (Event.event_date >= datetime.datetime.combine(today, datetime.time.min)),
+    ).order_by(nullslast(Event.event_date.asc())).all()
+    if category:
+        events = [e for e in events if e.category == category]
+
+    event_ids = [e.id for e in events]
+    snaps_by_event = _load_recent_snaps(db, event_ids)
+    return _build_events_result(events, snaps_by_event, ue_by_event_id)
 
 
 @router.delete("/events/{event_id}")
