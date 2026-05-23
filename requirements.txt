@@ -9,4 +9,3 @@ requests
 numpy
 scikit-learn
 anthropic
-psycopg2-binary
