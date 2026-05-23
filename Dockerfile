@@ -1,29 +1,24 @@
-FROM python:3.12-slim
+# Stage 1: Build frontend
+FROM node:22-slim AS frontend-builder
 
-# Install Node.js
-RUN apt-get update && apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python backend + built frontend
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Build frontend
-COPY frontend/package.json frontend/package-lock.json frontend/
-RUN cd frontend && npm ci
-
-COPY frontend/ frontend/
-RUN cd frontend && npm run build
-
-# Copy backend
 COPY backend/ backend/
 COPY watchlist.yaml .
+COPY --from=frontend-builder /app/frontend/dist frontend/dist
 
-# Create data directories (local fallback; Fly.io mounts volume at /data)
 RUN mkdir -p /app/data /data
 
 EXPOSE 8000
