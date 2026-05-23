@@ -51,6 +51,13 @@ export default function App() {
     fetchAlerts().then(setAlerts).catch(() => {});
   }, []);
 
+  // Keep Render free-tier backend alive by pinging /health every 10 minutes
+  useEffect(() => {
+    const ping = () => fetch('/health').catch(() => {});
+    const id = setInterval(ping, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   const loadEvents = useCallback(async (category: Category, silent = false) => {
