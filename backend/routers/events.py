@@ -269,10 +269,10 @@ def set_category_quantity(body: QuantityRequest, db: Session = Depends(get_sessi
 
 
 @router.post("/fetch")
-def trigger_fetch(db: Session = Depends(get_session)):
-    """Manually trigger a price fetch for all watchlist targets."""
+def trigger_fetch(background_tasks: BackgroundTasks):
+    """Manually trigger a price fetch in the background."""
     from backend.scheduler import run_fetch_job
-    run_fetch_job(db, force=True)
+    background_tasks.add_task(run_fetch_job, force=True)
     return {"status": "ok", "message": "Fetch triggered"}
 
 
